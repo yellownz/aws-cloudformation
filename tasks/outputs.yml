@@ -1,0 +1,5 @@
+- block:
+  - name: S3 Template URL
+    debug: msg={{ cf_s3_template_url }}
+  tags:
+    - generate

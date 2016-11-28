@@ -1,0 +1,12 @@
+{% import 'macros/network.j2' as network with context %}
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Core Network Resources
+    
+Resources:
+{# Networking Resources #}
+{{ network.resources(config_vpc_id, config_vpc_cidr, config_vgw_id) }}
+
+Outputs:
+{# Networking Outputs #}
+{{ network.outputs(config_vpc_id, config_vpc_cidr) }}

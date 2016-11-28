@@ -1,0 +1,24 @@
+---
+cf_default_stack_policy:
+  Statement:
+    - Effect: "Allow"
+      Action: "Update:*"
+      Principal: "*"
+      Resource: "*"
+
+cf_cloudwatch_ec2_logs_policy: 
+  PolicyName: CloudWatchLogs
+  PolicyDocument:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Action:
+        - "logs:CreateLogGroup"
+        - "logs:CreateLogStream"
+        - "logs:PutLogEvents"
+        - "logs:DescribeLogStreams"
+        Resource:
+          Fn::Join: [":", [ 
+            "arn:aws:logs", { "Ref": "AWS::Region" }, { "Ref": "AWS::AccountId" }, 
+            "log-group", "{{ cf_stack_name + '*'}}"
+          ] ]

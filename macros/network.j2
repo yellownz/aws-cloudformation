@@ -1,0 +1,153 @@
+{% 
+  macro resources(
+    vpc_id, 
+    vpc_cidr, 
+    vgw_id='',
+    public_subnets=['public'],
+    private_subnets=['medium','high','management'], 
+    az_count=2, 
+    subnet_size=24,
+    dns_servers=[],
+    domain_name='',
+    route53_domains=[]) 
+%}
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags:
+        - Key: "Name"
+          Value: "igw"
+        - Key: "org:security:level"
+          Value: "public"
+  InternetGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: { "Ref": "InternetGateway" }
+      VpcId: {{ vpc_id | to_json }}
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: {{ vpc_id | to_json }}
+      Tags:
+        - Key: "Name"
+          Value: "public-route-table"
+        - Key: "org:security:level"
+          Value: "public"
+  PrivateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: {{ vpc_id | to_json }}
+      Tags:
+        - Key: "Name"
+          Value: "private-route-table"
+        - Key: "org:security:level"
+          Value: "mixed"
+  PublicDefaultRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: "InternetGatewayAttachment"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: { "Ref": "InternetGateway" }
+      RouteTableId: { "Ref": "PublicRouteTable" }
+  S3Endpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      RouteTableIds: 
+        - { "Ref" : "PublicRouteTable" }
+        - { "Ref" : "PrivateRouteTable" }
+      ServiceName: { "Fn::Join": [ "", [ "com.amazonaws.", { "Ref": "AWS::Region" }, ".s3" ] ] }
+      VpcId: {{ vpc_id | to_json }}
+{% if domain_name or dns_servers %}
+  DhcpOptions:
+    Type: "AWS::EC2::DHCPOptions"
+    Properties:
+{% if domain_name %}
+      DomainName: "{{ domain_name }}"
+{% endif %}
+{% if dns_servers %}
+      DomainNameServers: {{ dns_servers | to_json }}
+{% endif %}
+      Tags:
+        - Key: "Name"
+          Value: "dhcpopts"
+        - Key: "org:security:level"
+          Value: "mixed"
+  DhcpOptionsAssociation: 
+    Type: "AWS::EC2::VPCDHCPOptionsAssociation"
+    Properties:
+      DhcpOptionsId: { "Ref": "DhcpOptions" }
+      VpcId: {{ vpc_id | to_json }}
+{% endif %}
+{% if vgw_id %}
+  VpnGatewayRoutePropagation:
+    Type: "AWS::EC2::VPNGatewayRoutePropagation"
+    Properties:
+      RouteTableIds:
+        - { "Ref": "PublicRouteTable" }
+        - { "Ref": "PrivateRouteTable" }
+      VpnGatewayId: {{ vgw_id | to_json }}
+{% endif %}
+{% for domain in route53_domains %}
+  VpcPrivateZone:
+      Type: "AWS::Route53::HostedZone"
+      Properties: 
+        HostedZoneConfig: 
+          Comment: "{{ domain + 'private zone' }}"
+        HostedZoneTags:
+          - Key: "Name"
+            Value: "{{ domain }}"
+          - Key: "org:security:level"
+            Value: "mixed"
+        Name: "{{ domain }}"
+        VPCs:
+          - VPCId: {{ vpc_id | to_json }}
+            VPCRegion: { "Ref": "AWS::Region" }
+{% endfor %}
+{% for subnet in (public_subnets + private_subnets) %}
+{% set outer_loop = loop %}
+{% for zone in range(0, az_count) %}
+{% set subnet_name = subnet | title + "Subnet" + "ABC"[loop.index0] %}
+  {{ subnet_name }}:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: {{ vpc_id | to_json }}
+      CidrBlock: "{{ vpc_cidr | ipsubnet(subnet_size, 2 * outer_loop.index0 + loop.index0) }}"
+      AvailabilityZone: { "Fn::Join": ["", [ { "Ref": "AWS::Region" }, "{{ 'abc'[loop.index0] }}" ] ] }
+      Tags:
+        - Key: "Name"
+          Value: "{{ subnet | lower }}-{{ 'abc'[loop.index0] }}"
+        - Key: "org:security:level"
+          Value: "{{ subnet | lower }}"
+  {{ subnet_name + "Routing" }}:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+{% if subnet in public_subnets %}
+      RouteTableId: { "Ref": "PublicRouteTable" }
+{% else %}
+      RouteTableId: { "Ref": "PrivateRouteTable" }
+{% endif %}
+      SubnetId: { "Ref": "{{ subnet_name }}" }
+{% endfor %}
+{% endfor %}
+{% endmacro %}
+
+{% macro outputs(
+  vpc_id, 
+  vpc_cidr,
+  public_subnets=['public'],
+  private_subnets=['medium','high','management'], 
+  az_count=2, 
+  subnet_size=24
+) %}
+{% for subnet in (public_subnets + private_subnets) %}
+{% set outer_loop = loop %}
+{% for zone in range(0, az_count) %}
+{% set subnet_name = subnet | title + "Subnet" + "ABC"[loop.index0] %}
+  {{ subnet_name }}:
+    Description: "{{ subnet | title + " Subnet " + "Availability Zone " + "ABC"[loop.index0] }}"
+    Value: { "Ref": "{{ subnet_name }}" }
+    Export:
+      Name: "{{ subnet_name }}"
+{% endfor %}
+{% endfor %}
+{% endmacro %}
