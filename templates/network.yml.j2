@@ -5,8 +5,8 @@ Description: Core Network Resources
     
 Resources:
 {# Networking Resources #}
-{{ network.resources(config_vpc_id, config_vpc_cidr, config_vgw_id) }}
+{{ network.resources(config_vpc_cidr) }}
 
 Outputs:
 {# Networking Outputs #}
-{{ network.outputs(config_vpc_id, config_vpc_cidr) }}
+{{ network.outputs(config_vpc_cidr) }}
