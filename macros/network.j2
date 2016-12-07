@@ -66,7 +66,8 @@
       RouteTableIds: 
         - { "Ref" : "PublicRouteTable" }
         - { "Ref" : "PrivateRouteTable" }
-      ServiceName: { "Fn::Join": [ "", [ "com.amazonaws.", { "Ref": "AWS::Region" }, ".s3" ] ] }
+      ServiceName: 
+        Fn::Sub: "com.amazonaws.${AWS::Region}.s3"
       VpcId:
         Ref: Vpc
 {% if domain_name or dns_servers %}
@@ -118,7 +119,8 @@
       VpcId:
         Ref: Vpc
       CidrBlock: "{{ vpc_cidr | ipsubnet(subnet_size, 2 * outer_loop.index0 + loop.index0) }}"
-      AvailabilityZone: { "Fn::Join": ["", [ { "Ref": "AWS::Region" }, "{{ 'abc'[loop.index0] }}" ] ] }
+      AvailabilityZone: 
+        Fn::Sub: "${AWS::Region}{{ 'abc'[loop.index0] }}"
       Tags:
         - Key: "Name"
           Value: "{{ subnet | lower }}-{{ 'abc'[loop.index0] }}"
