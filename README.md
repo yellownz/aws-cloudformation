@@ -210,6 +210,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.2.0
+
+- ** ENHANCEMENT **: Add EC2 Container Registry (ECR) template
+
 ### Version 0.1.1
 
 - ** BUG FIX **: Fix issue where playbook will exit with success code even if a failure occurs
