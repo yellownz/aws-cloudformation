@@ -212,12 +212,12 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ### Version 0.2.0
 
-- ** ENHANCEMENT **: Add EC2 Container Registry (ECR) template
+- **ENHANCEMENT** : Add EC2 Container Registry (ECR) template
 
 ### Version 0.1.1
 
-- ** BUG FIX **: Fix issue where playbook will exit with success code even if a failure occurs
-- ** ENHANCEMENT **: Add Subnet CIDRs as exported outputs
+- **BUG FIX** : Fix issue where playbook will exit with success code even if a failure occurs
+- **ENHANCEMENT** : Add Subnet CIDRs as exported outputs
 
 ### Version 0.1.0
 
