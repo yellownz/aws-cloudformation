@@ -168,12 +168,11 @@
     Value: { "Ref": "{{ subnet_name }}" }
     Export:
       Name: "{{ prefix | title + subnet_name }}"
-  {{ prefix | title + 'VpcId' }}:
-    Description: "{{ prefix | title + ' VPC Identifier' }}"
-    Value:
-      Ref: Vpc
+  {{ prefix | title + subnet_name + "Cidr" }}:
+    Description: "{{ prefix | title + " " + subnet | title + " Subnet " + " Availability Zone " + "ABC"[loop.index0] + " CIDR" }}"
+    Value: "{{ vpc_cidr | ipsubnet(subnet_size, 2 * outer_loop.index0 + loop.index0) }}"
     Export:
-      Name: "{{ prefix | title + 'VpcId' }}"
+      Name: "{{ prefix | title + subnet_name + "Cidr" }}"
 {% endfor %}
 {% endfor %}
 {% endmacro %}
