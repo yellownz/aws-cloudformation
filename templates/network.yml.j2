@@ -3,10 +3,23 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: Core Network Resources
     
-Resources:
 {# Networking Resources #}
-{{ network.resources(config_vpc_cidr) }}
+{{ network.resources(
+    config_vpc_cidr,
+    public_subnets=config_public_subnets | default(['public']),
+    private_subnets=config_private_subnets | default(['medium','high','management']),
+    az_count=config_az_count | default(2), 
+    subnet_size=config_subnet_size | default(24),
+    prefix=config_network_label | default('default'))
+}}
 
 Outputs:
 {# Networking Outputs #}
-{{ network.outputs(config_vpc_cidr) }}
+{{ network.outputs(
+    config_vpc_cidr, 
+    public_subnets=config_public_subnets | default(['public']),
+    private_subnets=config_private_subnets | default(['medium','high','management']),
+    az_count=config_az_count | default(2),
+    subnet_size=config_subnet_size | default(24),
+    prefix=config_network_label | default('default'))
+}}
