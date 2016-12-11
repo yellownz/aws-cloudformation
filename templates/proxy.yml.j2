@@ -185,7 +185,7 @@ Resources:
           ToPort: 53
           CidrIp:
             Fn::Join: ["", [
-              "Fn::ImportValue: "DefaultVpcDnsServer","/32"
+              "Fn::ImportValue": "DefaultVpcDnsServer", "/32"
             ] ]
         - IpProtocol: "udp"
           FromPort: 123
