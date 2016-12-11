@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: CloudFormation Resources
+
+Resources:
+  CfnTemplatesBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName:
+        Fn::Sub: "${AWS::AccountId}-cfn-templates"
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: "${AWS::AccountId}-cfn-templates"
+  CfnLambdaBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: 
+        Fn::Sub: "${AWS::AccountId}-cfn-lambda"
+      VersioningConfiguration:
+        Status: "Enabled"
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: "${AWS::AccountId}-cfn-lambda"
+{% if config_cfn_lambda_remote_accounts is defined %}
+  CfnLambdaBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: { "Ref": "CfnLambdaBucket" }
+      PolicyDocument:
+        Statement:
+        - Sid: "Get Lambda Functions"
+          Effect: "Allow"
+          Principal:
+            AWS: 
+{% for account in config_cfn_lambda_remote_accounts %}
+            - "arn:aws:iam::{{ account }}:root"
+            - "arn:aws:iam::{{ account }}:root"
+{% endfor %}            
+          Action: 
+          - "s3:GetObject"
+          - "s3:GetObjectVersion"
+          Resource: 
+            Fn::Sub: "arn:aws:s3:::${AWS::AccountId}-cfn-lambda/*"
+{% endif %}
+Outputs:
+  CfnTemplatesBucketName:
+    Description: "CloudFormation Templates Bucket Name"
+    Value:
+      Fn::Sub: "${CfnTemplatesBucket.DomainName}"
+    Export:
+      Name: "CfnTemplatesBucket"
+  CfnTemplatesBucketURL:
+    Description: "CloudFormation Templates Bucket URL"
+    Value: 
+      Fn::Sub: "${CfnTemplatesBucket.WebsiteURL}"
+    Export:
+      Name: "CfnTemplatesBucketURL"
+  CfnLambdaBucketName:
+    Description: "CloudFormation Lambda Bucket Name"
+    Value: 
+      Fn::Sub: "${CfnLambdaBucket.DomainName}"
+    Export:
+      Name: "CfnLambdaBucket"
+  CfnLambdaBucketURL:
+    Description: "CloudFormation Lambda Bucket URL"
+    Value: 
+      Fn::Sub: "${CfnLambdaBucket.WebsiteURL}"
+    Export:
+      Name: "CfnLambdaBucketURL"

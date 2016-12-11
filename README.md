@@ -213,6 +213,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.3.0
 
 - **ENHANCEMENT** : Add support for creating a default VPC domain in network template
+- **ENHANCEMENT** : Add CloudFormation resources template
 
 ### Version 0.2.0
 
