@@ -212,6 +212,7 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ### Version 0.3.0
 
+- **ENHANCEMENT** : Add proxy stack template
 - **ENHANCEMENT** : Add support for creating a default VPC domain in network template
 - **ENHANCEMENT** : Add CloudFormation resources template
 
