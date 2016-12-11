@@ -185,6 +185,11 @@
     Value: "{{ vpc_cidr }}"
     Export:
       Name: "{{ prefix | title + 'VpcCidr' }}"
+  {{ prefix | title + 'VpcDnsServer' }}:
+    Description: "{{ prefix | title + ' VPC AWS Provided DNS Server IP Address' }}"
+    Value: "{{ vpc_cidr | ipaddr('2') | ipaddr('address') }}"
+    Export:
+      Name: "{{ prefix | title + 'VpcCidr' }}"
 {% if vpc_root_domain %}
   {{ prefix | title + 'VpcDomain' }}:
     Description: "{{ prefix | title + ' VPC Domain' }}"
