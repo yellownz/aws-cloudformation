@@ -7,6 +7,7 @@
     subnet_size=24,
     dns_servers=[],
     domain_name='',
+    vpc_root_domain='',
     route53_domains=[],
     prefix='default')
 %}
@@ -76,6 +77,9 @@
     Properties:
 {% if domain_name %}
       DomainName: "{{ domain_name }}"
+{% elif vpc_root_domain %}
+      DomainName:
+        Fn::Sub: "${Vpc}.{{ vpc_root_domain }}"
 {% endif %}
 {% if dns_servers %}
       DomainNameServers: {{ dns_servers | to_json }}
@@ -92,12 +96,31 @@
       VpcId:
         Ref: Vpc
 {% endif %}
-{% for domain in route53_domains %}
+{% if vpc_root_domain %}
   VpcPrivateZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties: 
+      HostedZoneConfig: 
+        Comment: 
+          Fn::Sub: "${Vpc} private zone"
+      HostedZoneTags:
+        - Key: "Name"
+          Value: 
+            Fn::Sub: "${Vpc}.{{ vpc_root_domain }}"
+        - Key: "org:security:level"
+          Value: "mixed"
+      Name:
+        Fn::Sub: "${Vpc}.{{ vpc_root_domain }}"
+      VPCs:
+        - VPCId: { "Ref": "Vpc" }
+          VPCRegion: { "Ref": "AWS::Region" }
+{% endif %}
+{% for domain in route53_domains %}
+  {{ domain | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') + 'Zone' }}:
       Type: "AWS::Route53::HostedZone"
       Properties: 
         HostedZoneConfig: 
-          Comment: "{{ domain + 'private zone' }}"
+          Comment: "{{ domain + ' private zone' }}"
         HostedZoneTags:
           - Key: "Name"
             Value: "{{ domain }}"
@@ -147,6 +170,7 @@
   subnet_size=24,
   dns_servers=[],
   domain_name='',
+  vpc_root_domain='',
   route53_domains=[],
   prefix='default')
 %}
@@ -161,6 +185,20 @@
     Value: "{{ vpc_cidr }}"
     Export:
       Name: "{{ prefix | title + 'VpcCidr' }}"
+{% if vpc_root_domain %}
+  {{ prefix | title + 'VpcDomain' }}:
+    Description: "{{ prefix | title + ' VPC Domain' }}"
+    Value: 
+      Fn::Sub: "${Vpc}.{{ vpc_root_domain }}"
+    Export:
+      Name: "{{ prefix | title + 'VpcDomain' }}"
+  {{ prefix | title + 'VpcZone' }}:
+    Description: "{{ prefix | title + ' VPC Zone' }}"
+    Value: 
+      Fn::Sub: "${Vpc}.{{ vpc_root_domain }}."
+    Export:
+      Name: "{{ prefix | title + 'VpcZone' }}"
+{% endif %}
 {% for subnet in (public_subnets + private_subnets) %}
 {% set outer_loop = loop %}
 {% for zone in range(0, az_count) %}

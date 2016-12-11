@@ -11,6 +11,8 @@ Resources:
     private_subnets=config_private_subnets | default(['medium','high','management']),
     az_count=config_az_count | default(2), 
     subnet_size=config_subnet_size | default(24),
+    domain_name=config_domain_name | default(''),
+    vpc_root_domain=config_vpc_root_domain | default(''),
     prefix=config_network_label | default('default'))
 }}
 
@@ -22,5 +24,7 @@ Outputs:
     private_subnets=config_private_subnets | default(['medium','high','management']),
     az_count=config_az_count | default(2),
     subnet_size=config_subnet_size | default(24),
+    domain_name=config_domain_name | default(''),
+    vpc_root_domain=config_vpc_root_domain | default(''),
     prefix=config_network_label | default('default'))
 }}
