@@ -50,6 +50,8 @@ Resources:
         - Fn::ImportValue: "DefaultPublicSubnetA"
         - Fn::ImportValue: "DefaultPublicSubnetB"
       CrossZone: "true"
+      ConnectionSettings:
+        IdleTimeout: 120
       ConnectionDrainingPolicy:
         Enabled: "true"
         Timeout: 120

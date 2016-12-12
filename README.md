@@ -210,6 +210,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.3.1
+
+- **BUG FIX** : Set Proxy template ELB idle timeout to 120 seconds to avoid ECS agent disconnections
+
 ### Version 0.3.0
 
 - **ENHANCEMENT** : Add proxy stack template
