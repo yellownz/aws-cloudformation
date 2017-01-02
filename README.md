@@ -137,7 +137,8 @@ And then after stack modification is complete, reset the stack policy to it's pr
 
 This role sets the following facts that you can use subsequently in your roles:
 
-- `cloudformation['<stack-name']` - CloudFormation facts about the created stack.  This includes stack resources and stack outputs.
+- `cloudformation['<stack-name>']` - CloudFormation facts about the created stack.  This includes stack resources and stack outputs.
+- `cf_stack_facts` - CloudFormation facts about the created stack.  This includes stack resources and stack outputs and is identical to the `cloudformation['<stack-name>']` fact.
 - `cf_s3_template_url` - S3 URL of the CloudFormation template.  This is also printed at the end of the completion of this role.
 
 ## Macros
@@ -209,6 +210,10 @@ The following is an example of a playbook configured to use this role.  Note the
 ```
 
 ## Release Notes
+
+### Version 0.4.0
+
+- **ENHANCEMENT** : Add `cf_stack_facts` output 
 
 ### Version 0.3.1
 

@@ -362,7 +362,7 @@ Resources:
       FunctionName: 
         Fn::Sub: "${AWS::StackName}-cfnLogGroups"
       Code:
-        S3Bucket: "429614120872-cfn-lambda"
+        S3Bucket: "${AWS::AccountId}-cfn-lambda"
         S3Key: "cfnLogGroups.zip"
         S3ObjectVersion: "DDB7tb7QDEReC3r9bf7PgOSsEm7soplc"
   LogGroupsProvisionerRole:
