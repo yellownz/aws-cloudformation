@@ -214,6 +214,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.4.0
 
 - **ENHANCEMENT** : Add `cf_stack_facts` output 
+- **BUG FIX** : Fix missing substituion in proxy template 
 
 ### Version 0.3.1
 
