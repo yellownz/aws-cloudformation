@@ -211,6 +211,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.6.0
+
+- **ENHANCEMENT**: Output `config.json` build artifact compatible with AWS CodePipeline CloudFormation Deployment
+
 ### Version 0.5.0
 
 - **ENHANCEMENT**: Add KMS key to [CloudFormation template](`templates/cfn.yml.j2`)
