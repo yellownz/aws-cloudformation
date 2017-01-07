@@ -2,11 +2,11 @@
 - block:
     - name: set template encoding facts
       set_fact:
-        cf_stack_template_yaml: "{{ cf_build_folder }}/stack.yml"
-        cf_stack_template_json: "{{ cf_build_folder }}/stack.json"
-        cf_stack_template_temp_json: "{{ cf_build_folder }}/stack.tmp.json"
-        cf_stack_policy_json: "{{ cf_build_folder }}/policy.json"
-        cf_stack_config_json: "{{ cf_build_folder }}/config.json"
+        cf_stack_template_yaml: "{{ cf_build_folder }}/{{ cf_stack_name }}-stack.yml"
+        cf_stack_template_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-stack.json"
+        cf_stack_template_temp_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-stack.tmp.json"
+        cf_stack_policy_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-policy.json"
+        cf_stack_config_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-config.json"
     - name: generate YAML template
       template:
         src: "{{ cf_stack_template }}"
