@@ -128,6 +128,12 @@ Outputs:
       Fn::Sub: "${CfnMasterKey}"
     Export:
       Name: "CfnMasterKey"
+  CfnMasterKeyArn:
+    Description: "CloudFormation Master Key ARN"
+    Value: 
+      Fn::Sub: "${CfnMasterKey.Arn}"
+    Export:
+      Name: "CfnMasterKeyArn"
   CfnLambdaBucketName:
     Description: "CloudFormation Lambda Bucket Name"
     Value: 
