@@ -211,6 +211,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.5.0
+
+- **ENHANCEMENT**: Add KMS key to [CloudFormation template](`templates/cfn.yml.j2`)
+
 ### Version 0.4.0
 
 - **ENHANCEMENT** : Add `cf_stack_facts` output 
