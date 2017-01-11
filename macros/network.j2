@@ -128,7 +128,7 @@
           - Key: "org:security:level"
             Value: "mixed"
         Name: "{{ domain }}"
-{% if domain in private_domains %}        
+{% if domain in private_domains %}
         VPCs:
           - VPCId:
               Ref: Vpc
