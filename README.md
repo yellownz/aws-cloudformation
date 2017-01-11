@@ -214,6 +214,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.6.0
 
 - **ENHANCEMENT**: Output `config.json` build artifact compatible with AWS CodePipeline CloudFormation Deployment
+- **ENHANCEMENT**: Add support for configuring public and/or private route 53 zones to [network template](`templates/network.yml.j2`)
 
 ### Version 0.5.0
 

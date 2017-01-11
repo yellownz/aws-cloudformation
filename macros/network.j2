@@ -7,8 +7,9 @@
     subnet_size=24,
     dns_servers=[],
     domain_name='',
-    vpc_root_domain='',
-    route53_domains=[],
+    vpc_root_domain=False,
+    private_domains=[],
+    public_domains=[],
     prefix='default')
 %}
   Vpc:
@@ -115,7 +116,7 @@
         - VPCId: { "Ref": "Vpc" }
           VPCRegion: { "Ref": "AWS::Region" }
 {% endif %}
-{% for domain in route53_domains %}
+{% for domain in (private_domains + public_domains) %}
   {{ domain | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') + 'Zone' }}:
       Type: "AWS::Route53::HostedZone"
       Properties: 
@@ -127,10 +128,12 @@
           - Key: "org:security:level"
             Value: "mixed"
         Name: "{{ domain }}"
+{% if domain in private_domains %}        
         VPCs:
           - VPCId:
               Ref: Vpc
             VPCRegion: { "Ref": "AWS::Region" }
+{% endif %}
 {% endfor %}
 {% for subnet in (public_subnets + private_subnets) %}
 {% set outer_loop = loop %}
@@ -170,8 +173,9 @@
   subnet_size=24,
   dns_servers=[],
   domain_name='',
-  vpc_root_domain='',
-  route53_domains=[],
+  vpc_root_domain=False,
+  private_domains=[],
+  public_domains=[],
   prefix='default')
 %}
   {{ prefix | title + 'VpcId' }}:
