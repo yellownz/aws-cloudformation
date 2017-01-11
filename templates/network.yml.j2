@@ -12,7 +12,7 @@ Resources:
     az_count=config_az_count | default(2), 
     subnet_size=config_subnet_size | default(24),
     domain_name=config_domain_name | default(''),
-    vpc_root_domain=config_vpc_root_domain | default(False),
+    vpc_root_domain=config_vpc_root_domain | default(''),
     private_domains=config_private_domains | default([]),
     public_domains=config_public_domains | default([]),
     prefix=config_network_label | default('default'))
@@ -27,7 +27,7 @@ Outputs:
     az_count=config_az_count | default(2),
     subnet_size=config_subnet_size | default(24),
     domain_name=config_domain_name | default(''),
-    vpc_root_domain=config_vpc_root_domain | default(False),
+    vpc_root_domain=config_vpc_root_domain | default(''),
     private_domains=config_private_domains | default([]),
     public_domains=config_public_domains | default([]),
     prefix=config_network_label | default('default'))
