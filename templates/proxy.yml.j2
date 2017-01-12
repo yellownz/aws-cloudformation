@@ -105,7 +105,7 @@ Resources:
         Timeout: "PT15M"
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: "2"
+        MinInstancesInService: { "Ref": "ApplicationAutoscalingDesiredCount"}
         MinSuccessfulInstancesPercent: "100"
         WaitOnResourceSignals: "true"
         PauseTime: "PT15M"
@@ -116,7 +116,7 @@ Resources:
       LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
       MinSize: "0"
       MaxSize: "4"
-      DesiredCapacity: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      DesiredCapacity: { "Ref": "ApplicationAutoscalingDesiredCount" }
       Tags:
         - Key: Name
           Value:

@@ -211,14 +211,18 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.6.1
+
+- **ENHANCEMENT** : Update [proxy template](`templates/proxy.yml.j2`) autoscaling update policy to match input desired count
+
 ### Version 0.6.0
 
-- **ENHANCEMENT**: Output `config.json` build artifact compatible with AWS CodePipeline CloudFormation Deployment
-- **ENHANCEMENT**: Add support for configuring public and/or private route 53 zones to [network template](`templates/network.yml.j2`)
+- **ENHANCEMENT** : Output `config.json` build artifact compatible with AWS CodePipeline CloudFormation Deployment
+- **ENHANCEMENT** : Add support for configuring public and/or private route 53 zones to [network template](`templates/network.yml.j2`)
 
 ### Version 0.5.0
 
-- **ENHANCEMENT**: Add KMS key to [CloudFormation template](`templates/cfn.yml.j2`)
+- **ENHANCEMENT** : Add KMS key to [CloudFormation template](`templates/cfn.yml.j2`)
 
 ### Version 0.4.0
 
