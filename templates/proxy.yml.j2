@@ -259,6 +259,9 @@ Resources:
           - ContainerPort: 3128
             HostPort: 3128
             Protocol: tcp
+        Environment:
+        - Key: SQUID_WHITELIST
+          Value: { "Ref": "ProxyWhitelist" }
   ProxyService:
     Type: "AWS::ECS::Service"
     DependsOn: 
@@ -268,9 +271,6 @@ Resources:
       Cluster: { "Ref": "ApplicationCluster" }
       TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
       DesiredCount: { "Ref": "ApplicationAutoscalingDesiredCount"}
-      Environment:
-        - Key: SQUID_WHITELIST
-          Value: { "Ref": "ProxyWhitelist" }
       DeploymentConfiguration:
           MinimumHealthyPercent: 50
           MaximumPercent: 200
