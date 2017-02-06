@@ -20,6 +20,10 @@ Parameters:
     Type: String
     Description: Docker Image Tag for Proxy
     Default: latest
+  ProxyWhitelist:
+    Type: String
+    Description: Comma separated list of domains to whitelist
+    Default: ""
   KeyName:
     Type: String
     Description: EC2 Key Pair for SSH Access
@@ -38,7 +42,7 @@ Resources:
       Type: "CNAME"
       Comment: 
         Fn::Sub: "Forward Proxy - ${Environment}"
-      ResourceRecords: 
+      ResourceRecords:
         - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
   ApplicationLoadBalancer:
     Type : "AWS::ElasticLoadBalancing::LoadBalancer"
@@ -264,6 +268,9 @@ Resources:
       Cluster: { "Ref": "ApplicationCluster" }
       TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
       DesiredCount: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      Environment:
+        - Key: SQUID_WHITELIST
+          Value: { "Ref": "ProxyWhitelist" }
       DeploymentConfiguration:
           MinimumHealthyPercent: 50
           MaximumPercent: 200
