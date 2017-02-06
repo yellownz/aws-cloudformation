@@ -260,7 +260,7 @@ Resources:
             HostPort: 3128
             Protocol: tcp
         Environment:
-        - Key: SQUID_WHITELIST
+        - Name: SQUID_WHITELIST
           Value: { "Ref": "ProxyWhitelist" }
   ProxyService:
     Type: "AWS::ECS::Service"
