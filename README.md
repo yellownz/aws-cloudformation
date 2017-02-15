@@ -215,6 +215,7 @@ The following is an example of a playbook configured to use this role.  Note the
 
 - **ENHANCEMENT** : Update [proxy template](`templates/proxy.yml.j2`) autoscaling update policy to match input desired count
 - **ENHANCEMENT** : Add whitelist support for [proxy template](`templates/proxy.yml.j2`)
+- **ENHANCEMENT** : Add disable whitelist support for [proxy template](`templates/proxy.yml.j2`) 
 - **ENHANCEMENT** : Add support for VPC Flow Logs to [network template]('templates/network.yml.j2')
 
 ### Version 0.6.0

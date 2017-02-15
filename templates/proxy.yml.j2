@@ -20,6 +20,13 @@ Parameters:
     Type: String
     Description: Docker Image Tag for Proxy
     Default: latest
+  ProxyDisableWhitelist:
+    Type: String
+    Description: Disables whitelist when set to true.  Proxy will operate as an open proxy.
+    Default: "false"
+    AllowedValues:
+    - "true"
+    - "false"
   ProxyWhitelist:
     Type: String
     Description: Comma separated list of domains to whitelist
@@ -264,6 +271,8 @@ Resources:
 {% endif %}
             Protocol: tcp
         Environment:
+        - Name: NO_WHITELIST
+          Value: { "Ref": "ProxyDisableWhitelist" }
         - Name: SQUID_WHITELIST
           Value: { "Ref": "ProxyWhitelist" }
   ProxyService:
