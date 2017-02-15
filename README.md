@@ -211,6 +211,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.7.0
+
+- **NEW FEATURE** : Add [security template](`templates/security.yml.j2`)
+
 ### Version 0.6.1
 
 - **ENHANCEMENT** : Update [proxy template](`templates/proxy.yml.j2`) autoscaling update policy to match input desired count

@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Security Resources
+
+Resources:
+{% for certificate in config_acm_certificates | default([]) %}
+{% set certificate_resource = certificate.name | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') %}
+  {{ certificate_resource }}:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: "{{ certificate.name }}"
+{% if certificate.alt is defined %}
+      SubjectAlternativeNames:
+      - "{{ certificate.alt }}"
+{% endif %}
+{% endfor %}
+
+Outputs:
+{% for certificate in config_acm_certificates | default([]) %}
+{% set certificate_resource = certificate.name | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') %}
+  {{ certificate_resource }}CertificateArn:
+    Description: "{{ certificate.name }} Certificate ARN"
+    Value: { "Ref": "{{ certificate_resource }}" }
+    Export:
+      Name: "{{ certificate_resource }}CertificateArn"
+{% endfor %}
