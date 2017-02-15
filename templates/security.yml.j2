@@ -9,9 +9,8 @@ Resources:
     Type: "AWS::CertificateManager::Certificate"
     Properties:
       DomainName: "{{ certificate.name }}"
-{% if certificate.alt is defined %}
-      SubjectAlternativeNames:
-      - "{{ certificate.alt }}"
+{% if certificate.alternative_names is defined %}
+      SubjectAlternativeNames: {{ certificate.alternative_names | to_json }}
 {% endif %}
 {% endfor %}
 
