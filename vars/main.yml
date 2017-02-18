@@ -82,7 +82,7 @@ cf_iam_groups:
                 - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}"
                 - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
               Condition:
-                Null:
+                "Null":
                   aws:MultiFactorAuthAge: "false"
             - Sid: "DenyEverythingExceptForBelowUnlessMFA"
               Effect: "Deny"
@@ -105,7 +105,7 @@ cf_iam_groups:
                 - "iam:UpdateLoginProfile"
               Resource: "*"
               Condition:
-                Null:
+                "Null":
                   aws:MultiFactorAuthAge: "true"
             - Sid: "DenyIamAccessToOtherAccountsUnlessMFA"
               Effect: "Deny"
@@ -125,7 +125,5 @@ cf_iam_groups:
                 - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}"
                 - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:user/${!aws:username}"
               Condition:
-                Null:
+                "Null":
                   aws:MultiFactorAuthAge: "true"
-                  
-  
