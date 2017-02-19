@@ -40,6 +40,12 @@ Resources:
         {{ cert_config.SubjectAlternativeNames | default([]) | to_nice_yaml(indent=2) | indent(8, False) }}
 {% endfor %}
 Outputs:
+  AdminRoleArn:
+    Description: "IAM Admin Role ARN"
+    Value:
+      Fn::Sub: ${AdminRole.Arn}
+    Export:
+      Name: AdminRoleArn
 {% for cert_name,cert_config in (config_acm_certificates | default({})).items() %}
 {% set cert_resource = cert_name | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') %}
   {{ cert_resource }}CertificateArn:
