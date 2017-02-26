@@ -216,6 +216,7 @@ The following is an example of a playbook configured to use this role.  Note the
 - **NEW FEATURE** : Add [security template](`templates/security.yml.j2`)
 - **BUG FIX** : Fix harded coded AZ count in [network template](`templates/network.yml.j2`)
 - **ENHANCEMENT** : Add ability to specify AZ count in [proxy template](`templates/proxy.yml.j2`)
+- **ENHANCEMENT** : Use native CloudFormation log group resorces in [proxy template](`templates/proxy.yml.j2`)
 
 ### Version 0.6.1
 
