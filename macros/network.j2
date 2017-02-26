@@ -186,7 +186,7 @@
     Properties:
       VpcId:
         Ref: Vpc
-      CidrBlock: "{{ vpc_cidr | ipsubnet(subnet_size, 2 * outer_loop.index0 + loop.index0) }}"
+      CidrBlock: "{{ vpc_cidr | ipsubnet(subnet_size, az_count * outer_loop.index0 + loop.index0) }}"
       AvailabilityZone: 
         Fn::Sub: "${AWS::Region}{{ 'abc'[loop.index0] }}"
       Tags:
@@ -261,7 +261,7 @@
       Name: "{{ prefix | title + subnet_name }}"
   {{ prefix | title + subnet_name + "Cidr" }}:
     Description: "{{ prefix | title + " " + subnet | title + " Subnet " + " Availability Zone " + "ABC"[loop.index0] + " CIDR" }}"
-    Value: "{{ vpc_cidr | ipsubnet(subnet_size, 2 * outer_loop.index0 + loop.index0) }}"
+    Value: "{{ vpc_cidr | ipsubnet(subnet_size, az_count * outer_loop.index0 + loop.index0) }}"
     Export:
       Name: "{{ prefix | title + subnet_name + "Cidr" }}"
 {% endfor %}
