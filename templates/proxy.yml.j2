@@ -12,6 +12,7 @@ Parameters:
   ApplicationAutoscalingDesiredCount:
     Type: Number
     Description: Application AutoScaling Group Desired Count
+    Default: {{ config_az_count | default(2) | int }}      
   ProxyImage:
     Type: String
     Description: Docker Image for Proxy
@@ -58,8 +59,9 @@ Resources:
       SecurityGroups:
         - Ref: "ApplicationLoadBalancerSecurityGroup"
       Subnets:
-        - Fn::ImportValue: "DefaultPublicSubnetA"
-        - Fn::ImportValue: "DefaultPublicSubnetB"
+{% for zone in config_az_count | default(2) | int %}      
+        - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
+{% endfor %}
       CrossZone: "true"
       ConnectionSettings:
         IdleTimeout: 120
@@ -122,8 +124,9 @@ Resources:
         PauseTime: "PT15M"
     Properties:
       VPCZoneIdentifier:
-        - Fn::ImportValue: "DefaultPublicSubnetA"
-        - Fn::ImportValue: "DefaultPublicSubnetB"
+{% for zone in config_az_count | default(2) | int %}      
+        - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
+{% endfor %}
       LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
       MinSize: "0"
       MaxSize: "4"
