@@ -54,7 +54,7 @@ Outputs:
 {% set cert_resource = cert_name | regex_replace('[^a-zA-Z0-9]', ' ') | title | regex_replace('\s', '') %}
   {{ cert_resource }}CertificateArn:
     Description: "{{ cert_config.DomainName | default(cert_name) }} Certificate ARN"
-    Value: { "Ref": "{{ cert_resource }}" }
+    Value: { "Ref": "{{ cert_resource }}Certificate" }
     Export:
       Name: "{{ cert_resource }}CertificateArn"
 {% endfor %}
