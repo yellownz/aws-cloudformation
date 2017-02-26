@@ -36,8 +36,12 @@ Resources:
     Type: "AWS::CertificateManager::Certificate"
     Properties:
       DomainName: "{{ cert_config.DomainName | default(cert_name) }}"
-      SubjectAlternativeNames: 
+      SubjectAlternativeNames:
         {{ cert_config.SubjectAlternativeNames | default([]) | to_nice_yaml(indent=2) | indent(8, False) }}
+{% if cert_config.DomainValidationOptions is defined %}
+      DomainValidationOptions:
+        {{ cert_config.DomainValidationOptions | to_nice_yaml(indent=2) | indent(8, False) }}
+{% endif %}
 {% endfor %}
 Outputs:
   AdminRoleArn:
