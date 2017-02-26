@@ -59,7 +59,7 @@ Resources:
       SecurityGroups:
         - Ref: "ApplicationLoadBalancerSecurityGroup"
       Subnets:
-{% for zone in config_az_count | default(2) | int %}      
+{% for zone in range(0, config_az_count | default(2) | int) %}      
         - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
 {% endfor %}
       CrossZone: "true"
@@ -124,7 +124,7 @@ Resources:
         PauseTime: "PT15M"
     Properties:
       VPCZoneIdentifier:
-{% for zone in config_az_count | default(2) | int %}      
+{% for zone in range(0, config_az_count | default(2) | int) %}      
         - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
 {% endfor %}
       LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
