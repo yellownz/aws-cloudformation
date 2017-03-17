@@ -211,6 +211,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.8.0
+
+- **NEW FEATURE** : Auto generate stack inputs from CloudFormation template parameters
+
 ### Version 0.7.0
 
 - **NEW FEATURE** : Add [security template](`templates/security.yml.j2`)
