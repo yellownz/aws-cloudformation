@@ -271,6 +271,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.8.0
 
 - **NEW FEATURE** : Auto generate stack inputs from CloudFormation template parameters
+- **NEW FEATURE** : Add ability to disable stack rollback
 
 ### Version 0.7.0
 
