@@ -10,10 +10,12 @@ Parameters:
   ApplicationInstanceType:
     Type: String
     Description: Application EC2 Instance Type
-  ApplicationAutoscalingDesiredCount:
+  ApplicationDesiredCount:
     Type: Number
     Description: Application AutoScaling Group Desired Count
-    Default: {{ config_az_count | default(2) | int }}      
+  ApplicationKeyName:
+    Type: String
+    Description: EC2 Key Pair for SSH Access
   ProxyImage:
     Type: String
     Description: Docker Image for Proxy
@@ -22,23 +24,24 @@ Parameters:
     Type: String
     Description: Docker Image Tag for Proxy
     Default: latest
-  ProxyDisableWhitelist:
-    Type: String
-    Description: Disables whitelist when set to true.  Proxy will operate as an open proxy.
-    Default: "false"
-    AllowedValues:
-    - "true"
-    - "false"
   ProxyWhitelist:
     Type: String
     Description: Comma separated list of domains to whitelist
     Default: ""
-  KeyName:
+  ProxyDisableWhitelist:
     Type: String
-    Description: EC2 Key Pair for SSH Access
-  Environment:
+    Description: Disables Proxy whitelist
+    Default: "false"
+    AllowedValues: [ "true", "false" ]
+  DockerNetworkMode:
     Type: String
-    Description: Stack Environment
+    Description: Docker network mode
+    Default: "bridge"
+    AllowedValues: [ "bridge", "host", "none" ]
+  TimeZone:
+    Type: String
+    Description: Time Zone
+    Default: "America/Los_Angeles"
   LogsRetention:
     Type: Number
     Description: Log retention time in days
@@ -55,7 +58,7 @@ Resources:
         Fn::Join: ["", [ "Fn::ImportValue": "DefaultVpcDomain", "." ] ]
       Type: "CNAME"
       Comment: 
-        Fn::Sub: "Forward Proxy - ${Environment}"
+        Fn::Sub: "Forward Proxy - ${AWS::StackName}"
       ResourceRecords:
         - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
   ApplicationLoadBalancer:
@@ -65,9 +68,8 @@ Resources:
       SecurityGroups:
         - Ref: "ApplicationLoadBalancerSecurityGroup"
       Subnets:
-{% for zone in range(0, config_az_count | default(2) | int) %}
-        - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
-{% endfor %}
+        - Fn::ImportValue: "DefaultPublicSubnetA"
+        - Fn::ImportValue: "DefaultPublicSubnetB"
       CrossZone: "true"
       ConnectionSettings:
         IdleTimeout: 120
@@ -81,7 +83,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: ${AWS::StackName}-${Environment}-elb
+            Fn::Sub: ${AWS::StackName}-elb
   ApplicationLoadBalancerSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -94,7 +96,7 @@ Resources:
           ToPort: 3128
           CidrIp:
             Fn::ImportValue: "DefaultVpcCidr"
-  ApplicationLoadBalancerToAutoscalingIngressTCP3128:
+  ApplicationLoadBalancerToApplicationAutoscalingIngress:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
       IpProtocol: "tcp"
@@ -102,7 +104,7 @@ Resources:
       ToPort: 3128
       GroupId: { "Ref": "ApplicationAutoscalingSecurityGroup" }
       SourceSecurityGroupId: { "Ref": "ApplicationLoadBalancerSecurityGroup" }
-  ApplicationLoadBalancerToAutoscalingEgressTCP3128:
+  ApplicationLoadBalancerToApplicationAutoscalingEgress:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
       IpProtocol: "tcp"
@@ -120,23 +122,22 @@ Resources:
       - MessagesLogGroup
     CreationPolicy:
       ResourceSignal:
-        Count: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        Count: { "Ref": "ApplicationDesiredCount"}
         Timeout: "PT15M"
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: { "Ref": "ApplicationAutoscalingDesiredCount"}
+        MinInstancesInService: { "Ref": "ApplicationDesiredCount"}
         MinSuccessfulInstancesPercent: "100"
         WaitOnResourceSignals: "true"
         PauseTime: "PT15M"
     Properties:
       VPCZoneIdentifier:
-{% for zone in range(0, config_az_count | default(2) | int) %}
-        - Fn::ImportValue: "{{ config_network_label | default('default') | title }}PublicSubnet{{ 'ABC'[loop.index0] }}"
-{% endfor %}
+        - Fn::ImportValue: "DefaultPublicSubnetA"
+        - Fn::ImportValue: "DefaultPublicSubnetB"
       LaunchConfigurationName: { "Ref" : "ApplicationAutoscalingLaunchConfiguration" }
       MinSize: "0"
       MaxSize: "4"
-      DesiredCapacity: { "Ref": "ApplicationAutoscalingDesiredCount" }
+      DesiredCapacity: { "Ref": "ApplicationDesiredCount" }
       Tags:
         - Key: Name
           Value:
@@ -155,18 +156,15 @@ Resources:
                 AUTOSCALING_GROUP: "ApplicationAutoscaling"
                 AWS_DEFAULT_REGION: { "Ref": "AWS::Region" }
                 ECS_CLUSTER: { "Ref": "ApplicationCluster" }
-                DOCKER_NETWORK_MODE: "{{ config_proxy_network_mode | default('bridge') }}"
-              cwd: "/home/ec2-user/"
-          files:
-            /etc/ecs/ecs.config:
-              content: 
-                Fn::Sub: "ECS_CLUSTER=${ApplicationCluster}\n"
+                DOCKER_NETWORK_MODE: { "Ref": "DockerNetworkMode" }
+                TIME_ZONE: { "Ref": "TimeZone" }
+              cwd: "/home/ec2-user"
     Properties:
       ImageId: { "Ref": "ApplicationImageId" }
       InstanceType: { "Ref": "ApplicationInstanceType" }
       AssociatePublicIpAddress: "true"
       IamInstanceProfile: { "Ref": "ApplicationAutoscalingInstanceProfile" }
-      KeyName: { "Ref": "KeyName" }
+      KeyName: { "Ref": "ApplicationKeyName" }
       SecurityGroups:
         - Ref: "ApplicationAutoscalingSecurityGroup"
       UserData: 
@@ -261,12 +259,12 @@ Resources:
   ApplicationTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
-      NetworkMode: "{{ config_proxy_network_mode | default('bridge') }}"
+      NetworkMode: { "Ref": "DockerNetworkMode" }
       ContainerDefinitions:
       - Name: squid
         Image:
           Fn::Sub: ${ProxyImage}:${ProxyImageTag}
-        Memory: 995
+        MemoryReservation: 495
         LogConfiguration:
           LogDriver: awslogs
           Options:
@@ -276,13 +274,9 @@ Resources:
             awslogs-stream-prefix: ecs
         PortMappings:
           - ContainerPort: 3128
-{% if config_proxy_network_mode | default('bridge') == 'bridge' %}
             HostPort: 3128
-{% endif %}
             Protocol: tcp
         Environment:
-        - Name: NO_WHITELIST
-          Value: { "Ref": "ProxyDisableWhitelist" }
         - Name: SQUID_WHITELIST
           Value: { "Ref": "ProxyWhitelist" }
   ProxyService:
@@ -293,7 +287,7 @@ Resources:
     Properties:
       Cluster: { "Ref": "ApplicationCluster" }
       TaskDefinition: { "Ref": "ApplicationTaskDefinition" }
-      DesiredCount: { "Ref": "ApplicationAutoscalingDesiredCount"}
+      DesiredCount: { "Ref": "ApplicationDesiredCount"}
       DeploymentConfiguration:
           MinimumHealthyPercent: 50
           MaximumPercent: 200
