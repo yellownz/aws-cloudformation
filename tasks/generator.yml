@@ -30,7 +30,7 @@
         name: Stack
     - name: set stack inputs
       set_fact:
-        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(vars, prefix=cf_config_prefix)) }}"
+        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(env, vars, prefix=cf_config_prefix)) }}"
     - name: set stack config
       set_fact:
         cf_stack_config:
