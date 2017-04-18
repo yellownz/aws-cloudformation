@@ -18,7 +18,7 @@
         name: Stack
     - name: apply stack overrides
       set_fact:
-        Stack: "{{ Stack | combine((vars['hostvars'][env] | dotted_dict(paths=['Stack.'])).get('Stack') or {}, recursive=True) }}"
+        Stack: "{{ Stack | combine((vars['hostvars'][env] | dotted_dict(paths=cf_stack_overrides)).get('Stack') or {}, recursive=True) }}"
     - name: output stack
       copy: content={{ Stack | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
       changed_when: False
@@ -36,10 +36,10 @@
       changed_when: False
     - name: apply config overrides
       set_fact:
-        Config: "{{ Config | default({}) | combine((vars['hostvars'][env] | dotted_dict(paths=['Config.'])).get('Config') or {}, recursive=True) }}"
+        cf_auto_inputs: "{{ ((vars['hostvars'][env] | dotted_dict(paths=['Stack.Inputs'])).get('Stack') or {}).get('Inputs') }}"
     - name: set stack inputs
       set_fact:
-        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(Config.Parameters | default({}))) }}"
+        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(cf_auto_inputs)) }}"
     - name: set stack config
       set_fact:
         cf_stack_config:

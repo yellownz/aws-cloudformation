@@ -1,4 +1,12 @@
 ---
+cf_stack_overrides:
+  - Stack.Parameters
+  - Stack.Conditions
+  - Stack.Resources
+  - Stack.Mappings
+  - Stack.Outputs
+  - Stack.Description
+
 cf_default_stack_policy:
   Statement:
     - Effect: "Allow"
