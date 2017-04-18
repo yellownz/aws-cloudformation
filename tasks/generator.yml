@@ -34,13 +34,12 @@
     - name: remove temp compact JSON template
       file: path={{ cf_stack_template_temp_json }} state=absent
       changed_when: False
-    - name: load generated template into Stack variable
-      include_vars:
-        file: "{{ cf_stack_template_json }}"
-        name: Stack
+    - name: apply config overrides
+      set_fact:
+        Config: "{{ Config | default({}) | combine((vars['hostvars'][env] | dotted_dict(paths=['Config.'])).get('Config') or {}, recursive=True) }}"
     - name: set stack inputs
       set_fact:
-        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(env, vars, prefix=cf_config_prefix)) }}"
+        cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(Config.Parameters | default({}))) }}"
     - name: set stack config
       set_fact:
         cf_stack_config:
