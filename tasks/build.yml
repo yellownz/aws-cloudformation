@@ -1,5 +1,22 @@
 ---
-- block:  
+- block:
+  - name: create stack variable
+    set_fact:
+      Stack: "{{ Stack | default({}) | combine((vars['hostvars'][env] | dotted_dict(paths=['Stack.'])).get('Stack') or {}, recursive=True) }}"
+
+  - name: create stack facts
+    set_fact:
+      cf_stack_name: "{{ cf_stack_name | default(Stack.Name) }}"
+      cf_stack_policy: "{{ cf_stack_policy | default(Stack.Policy) | default(cf_default_stack_policy) }}"
+      cf_stack_tags: "{{ cf_stack_tags | default(Stack.Tags) | default({}) }}"
+      cf_stack_overrides: "{{ {
+        'Parameters': Stack.Parameters | default({}),
+        'Resources': Stack.Resources | default({}),
+        'Mappings': Stack.Mappings | default({}),
+        'Outputs': Stack.Outputs | default({}),
+        'Conditions': Stack.Conditions | default({})
+      } }}"
+
   - name: create timestamp fact
     set_fact:
       current_timestamp: "{{ (ansible_date_time.date + ansible_date_time.time) | regex_replace('[^\\d]','') }}"
