@@ -268,6 +268,11 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.9.0
+
+- **NEW FEATURE** : Added stack overrides, a new syntax to override portions of the stack template
+- **BREAKING CHANGE** : Auto generated stack inputs now rely on the `Config.Parameters` dictionary, and support the same dot notation naming scheme of stack overrides
+
 ### Version 0.8.0
 
 - **NEW FEATURE** : Auto generate stack inputs from CloudFormation template parameters
