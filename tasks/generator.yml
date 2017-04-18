@@ -12,6 +12,16 @@
         src: "{{ cf_stack_template }}"
         dest: "{{ cf_stack_template_yaml }}"
       changed_when: False
+    - name: load generated template into Stack variable
+      include_vars:
+        file: "{{ cf_stack_template_yaml }}"
+        name: Stack
+    - name: apply stack overrides
+      set_fact:
+        Stack: "{{ Stack | combine((vars['hostvars'][env] | dotted_dict(paths=['Stack.'])).get('Stack') or {}, recursive=True) }}"
+    - name: output stack
+      copy: content={{ Stack | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
+      changed_when: False
     - name: generate stack policy
       copy: content={{ cf_stack_policy | default(cf_default_stack_policy) | to_json }} dest={{ cf_stack_policy_json }}
       changed_when: False
