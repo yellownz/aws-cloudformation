@@ -19,7 +19,6 @@
     - name: merge template into Stack variable
       set_fact:
         Stack: "{{ cf_stack_template_vars | combine(Stack, recursive=True) }}"
-    - debug: msg={{ Stack }}
     - name: apply stack overrides
       set_fact:
         cf_stack_template_vars: "{{ cf_stack_template_vars | combine(cf_stack_overrides, recursive=True) }}"
