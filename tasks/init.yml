@@ -19,7 +19,10 @@
       } }}"
       cf_stack_globals: "{{ vars['hostvars'][env] | dotted_dict(paths=['AWS::']) }}"
       cf_job_path: "{{ Stack.Path | default('./build') }}"
-
+      cf_delete_stack: "{{ Stack.Delete | default(False) | bool }}"
+      cf_disable_stack_policy: "{{ Stack.DisablePolicy | default(False) | bool }}"
+      cf_upload_s3: "{{ Stack.Upload | default(False) | bool }}"
+      
   - name: create timestamp fact
     set_fact:
       current_timestamp: "{{ (ansible_date_time.date + ansible_date_time.time) | regex_replace('[^\\d]','') }}"
