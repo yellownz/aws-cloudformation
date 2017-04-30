@@ -26,6 +26,12 @@
     - name: apply stack overrides
       set_fact:
         cf_stack_template_vars: "{{ cf_stack_template_vars | combine(cf_stack_overrides, recursive=True) }}"
+    - name: apply stack property transforms
+      set_fact:
+        Stack: "{{ Stack | property_transform(filter_paths=[role_path + '/filter_plugins']) }}"
+    - name: apply stack resource transforms
+      set_fact:
+        Stack: "{{ Stack | resource_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
     - name: output stack
       copy: content={{ cf_stack_template_vars | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
       changed_when: False
