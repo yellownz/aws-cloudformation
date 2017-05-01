@@ -12,7 +12,7 @@ class FilterModule(object):
   def filters(self):
     return {
         'property_transform': property_transform,
-        'resource_transform': resource_transform
+        'stack_transform': stack_transform
     }
 
 def lookup_template(file, template_paths=os.getcwd()):
@@ -50,6 +50,7 @@ def ansible_filters(filter_paths):
   return { k:v for filter in filter_loader.all() for k,v in filter.filters().items() }
 
 def resource_transform(data, filter_paths=[],template_paths=[]):
+def stack_transform(data, filter_paths=[],template_paths=[]):
   filter_paths += [os.getcwd() + '/filter_plugins']
   template_paths += [os.getcwd() + '/templates']
   # Load Ansible filters  
