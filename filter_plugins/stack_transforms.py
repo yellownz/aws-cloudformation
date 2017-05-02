@@ -63,9 +63,13 @@ def search_and_replace(data, search, replace, as_value=False):
     if key == 'Fn::Sub' and '${%s' % search in item:
       if as_value:
         replace_value = replace
-        if type(replace) is dict and list(set(replace.keys()) & set(['Fn::Sub','Ref'])):
-          replace_value = replace.get('Ref') or replace.get('Fn::Sub')
-        node[key] = item.replace('${%s}' % search, '%s' % replace_value)
+        if type(replace) is dict and 'Ref' in replace.keys():
+          replace_value = '${%s}' % replace['Ref']
+        if type(replace) is dict and 'Fn::Sub' in replace.keys():
+          replace_value = replace['Fn::Sub']
+        if type(replace) is dict and 'Fn::GetAtt' in replace.keys():
+          replace_value = '${%s}' % ('.').join(replace['Fn::GetAtt'])
+        node[key] = item.replace('${%s}' % search, replace_value)
       else:
         node[key] = item.replace('${%s' % search, '${%s' % replace)
   def walk(node, parent=[None], parent_key=0):
@@ -115,7 +119,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
           output[section][name+key] = output[section].pop(key)
           search_and_replace(output, key, name+key)
       # Process parameters
-      for output_param_key, output_param_value in output_parameters.items():
+      for output_param_key, output_param_value in output_parameters.iteritems():
         # Get corresponding transform property
         resource_property = resource_properties.get(output_param_key)
         if resource_property:
@@ -123,7 +127,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
         else:
           if output_param_value.get('Default') is None:
             raise AnsibleError("Transform parameter %s is missing associated transform property and default value" % output_param_key)
-          search_and_replace(output, output_param_key, output_param_value.get('Default'), as_value=True)
+          search_and_replace(output, output_param_key, output_param_value['Default'], as_value=True)
       # Rename main stack references to transform resource
       for key,value in output.get('Outputs', {}).iteritems():
         search_and_replace(data,'%s.%s' % (name, key.split(name)[-1]), value['Value'], as_value=True)
