@@ -1,3 +1,6 @@
+{% set kms = Config.Kms | default({}) %}
+{% set lambda = Config.Lambda | default({}) %}
+{% set admin = Config.Admin | default({}) %}
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: CloudFormation Resources
@@ -23,7 +26,7 @@ Resources:
         - Key: Name
           Value:
             Fn::Sub: "${AWS::AccountId}-cfn-lambda"
-{% if (Config.Lambda | default({})).RemoteAccounts is defined %}
+{% if lambda.RemoteAccounts is defined %}
   CfnLambdaBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
@@ -34,7 +37,7 @@ Resources:
           Effect: "Allow"
           Principal:
             AWS: 
-{% for account in Config.Lambda.RemoteAccounts %}
+{% for account in lambda.RemoteAccounts %}
             - "arn:aws:iam::{{ account }}:root"
             - "arn:aws:iam::{{ account }}:root"
 {% endfor %}            
@@ -65,8 +68,8 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
-{% for arn in (Config.Kms | default({})).Admins | default([]) %}
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ admin.Role | default('admin') }}"
+{% for arn in kms.Admins | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
@@ -87,8 +90,8 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
-{% for arn in (Config.Kms | default({})).Encrypters | default([]) %}
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ admin.Role | default('admin') }}"
+{% for arn in kms.Encrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
@@ -101,8 +104,8 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
-{% for arn in (Config.Kms | default({})).Decrypters | default([]) %}
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ admin.Role | default('admin') }}"
+{% for arn in kms.Decrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
