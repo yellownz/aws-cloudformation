@@ -65,7 +65,7 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
 {% for arn in (Config.Kms | default({})).Admins | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
@@ -87,7 +87,7 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
 {% for arn in (Config.Kms | default({})).Encrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
@@ -101,7 +101,7 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
+              - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ (Config.Admin | default({})).Role | default('admin') }}"
 {% for arn in (Config.Kms | default({})).Decrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
