@@ -23,7 +23,7 @@ Resources:
         - Key: Name
           Value:
             Fn::Sub: "${AWS::AccountId}-cfn-lambda"
-{% if config_cfn_lambda_remote_accounts is defined %}
+{% if (Config.Lambda | default({})).RemoteAccounts is defined %}
   CfnLambdaBucketPolicy:
     Type: "AWS::S3::BucketPolicy"
     Properties:
@@ -34,7 +34,7 @@ Resources:
           Effect: "Allow"
           Principal:
             AWS: 
-{% for account in config_cfn_lambda_remote_accounts %}
+{% for account in Config.Lambda.RemoteAccounts %}
             - "arn:aws:iam::{{ account }}:root"
             - "arn:aws:iam::{{ account }}:root"
 {% endfor %}            
@@ -66,7 +66,7 @@ Resources:
             Principal:
               AWS:
               - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
-{% for arn in config_cfn_kms_admins | default([]) %}
+{% for arn in (Config.Kms | default({})).Admins | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
@@ -88,7 +88,7 @@ Resources:
             Principal:
               AWS:
               - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
-{% for arn in config_cfn_kms_encrypters | default([]) %}
+{% for arn in (Config.Kms | default({})).Encrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
@@ -102,7 +102,7 @@ Resources:
             Principal:
               AWS:
               - Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/{{ config_cfn_admin_role | default('admin') }}"
-{% for arn in config_cfn_kms_decrypters | default([]) %}
+{% for arn in (Config.Kms | default({})).Decrypters | default([]) %}
               - {{ arn | to_json }}
 {% endfor %}
             Action:
