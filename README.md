@@ -272,6 +272,7 @@ The following is an example of a playbook configured to use this role.  Note the
 
 - **NEW FEATURE** : Added stack overrides, a new syntax to override portions of the stack template
 - **BREAKING CHANGE** : Auto generated stack inputs now rely on the `Stack.Inputs` dictionary, and support the same dot notation naming scheme of stack overrides
+- **ENHANCEMENT**: Add S3 bucket name exports to [CloudFormation template](`templates/cfn.yml.j2`)
 
 ### Version 0.8.0
 

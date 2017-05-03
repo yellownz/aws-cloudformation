@@ -113,9 +113,15 @@ Outputs:
   CfnTemplatesBucketName:
     Description: "CloudFormation Templates Bucket Name"
     Value:
-      Fn::Sub: "${CfnTemplatesBucket.DomainName}"
+      Ref: CfnTemplatesBucket
     Export:
       Name: "CfnTemplatesBucket"
+  CfnTemplatesBucketDomainName:
+    Description: "CloudFormation Templates Bucket Domain Name"
+    Value:
+      Fn::Sub: ${CfnTemplatesBucket.DomainName}
+    Export:
+      Name: "CfnTemplatesBucketDomainName"
   CfnTemplatesBucketURL:
     Description: "CloudFormation Templates Bucket URL"
     Value: 
@@ -137,9 +143,15 @@ Outputs:
   CfnLambdaBucketName:
     Description: "CloudFormation Lambda Bucket Name"
     Value: 
-      Fn::Sub: "${CfnLambdaBucket.DomainName}"
+      Ref: CfnLambdaBucket
     Export:
       Name: "CfnLambdaBucket"
+  CfnLambdaBucketDomainName:
+    Description: "CloudFormation Lambda Bucket Domain Name"
+    Value: 
+      Fn::Sub: ${CfnLambdaBucket.DomainName}
+    Export:
+      Name: "CfnLambdaBucketDomainName"
   CfnLambdaBucketURL:
     Description: "CloudFormation Lambda Bucket URL"
     Value: 
