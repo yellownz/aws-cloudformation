@@ -3,9 +3,10 @@ from ansible.plugins import filter_loader
 from ansible.errors import AnsibleError
 import yaml
 import os
+import re
 
 PROPERTY_TRANSFORM = 'Property::Transform'
-RESOURCE_TRANSFORM = 'Resource::Transform'
+STACK_TRANSFORM = 'Stack::Transform'
 
 class FilterModule(object):
   ''' Executes custom property transforms defined in a CloudFormation stack '''
@@ -48,8 +49,28 @@ def ansible_filters(filter_paths):
     filter_loader.add_directory(path)
   return { k:v for filter in filter_loader.all() for k,v in filter.filters().items() }
 
+# Joins a list of items with a delimiter object
+# e.g. [{'Ref':'AWS::StackName'},'-Thing'] => [{'Ref':'AWS::StackName'},{'Fn::ImportValue':'xyz'},'-Thing']
+def list_join(items, delimiter):
+  return reduce(lambda acc,item: acc + [delimiter] + [item] if acc else acc + [item], items, [])
+
+# Splits an Fn::Sub expression and returns list with parameter expressions replaced with Refs
+# e.g. '${AWS::StackName}-Thing' => [{'Ref':'AWS::StackName'},'-Thing']
+def ref_replace(s, regex='\${([^{}]*)}'):
+  parts = re.split(regex,s)
+  return [ {'Ref': parts[n] } if n % 2 else parts[n] for n in range(len(parts)) if parts[n] ]
+
 # Walks stack data structure and searchs and replaces a given parameter
 def search_and_replace(data, search, replace, as_value=False):
+  # Fn::Sub is evil!
+  def parse_fn_sub_instrinsic_functions(item, node, parent, parent_key):
+    ascii_node = {str(k): str(v) for k, v in node.items()}
+    parts = ascii_node['Fn::Sub'].split('${%s}' % search)
+    joined_parts = list_join(parts, replace)
+    ref_replaced = reduce(
+      lambda acc,item: acc + ref_replace(item) 
+      if type(item) is str else acc + [item], joined_parts, [])
+    parent[parent_key] = { 'Fn::Join': ['', ref_replaced ] }
   def parse(key, item, node, parent, parent_key):
     if key == 'Ref' and item == search:
       if as_value:
@@ -65,11 +86,20 @@ def search_and_replace(data, search, replace, as_value=False):
         replace_value = replace
         if type(replace) is dict and 'Ref' in replace.keys():
           replace_value = '${%s}' % replace['Ref']
-        if type(replace) is dict and 'Fn::Sub' in replace.keys():
+          node[key] = item.replace('${%s}' % search, replace_value)
+        elif type(replace) is dict and 'Fn::Sub' in replace.keys():
           replace_value = replace['Fn::Sub']
-        if type(replace) is dict and 'Fn::GetAtt' in replace.keys():
+          node[key] = item.replace('${%s}' % search, replace_value)
+        elif type(replace) is dict and 'Fn::GetAtt' in replace.keys():
           replace_value = '${%s}' % ('.').join(replace['Fn::GetAtt'])
-        node[key] = item.replace('${%s}' % search, replace_value)
+          node[key] = item.replace('${%s}' % search, replace_value)
+        elif type(replace) is dict and 'Fn::GetAtt' in replace.keys():
+          replace_value = '${%s}' % ('.').join(replace['Fn::GetAtt'])
+          node[key] = item.replace('${%s}' % search, replace_value)
+        elif type(replace) is dict and list(set(['Fn::ImportValue','Fn::If','Fn::Join','Fn::Select']) & set(replace.keys())):
+          parse_fn_sub_instrinsic_functions(item, node, parent, parent_key)
+        else:
+          node[key] = item.replace('${%s}' % search, replace_value)
       else:
         node[key] = item.replace('${%s' % search, '${%s' % replace)
   def walk(node, parent=[None], parent_key=0):
@@ -88,7 +118,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
   # Load Ansible filters  
   filters = ansible_filters(filter_paths)
   combine = filters['combine']
-  # Get resource transforms - {Stack}.Resources.<Resource> where <Resource>.Type = Resource::Transform::<transform>
+  # Get resource transforms - {Stack}.Resources.<Resource> where <Resource>.Type = Stack::Transform::<transform>
   transforms = [
     {
       'name': resource_key,
@@ -96,7 +126,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
       'output': render_template(os.path.basename(file), os.path.dirname(file), resource_value, filters) 
     }
     for resource_key, resource_value in data['Resources'].iteritems() 
-    if resource_value['Type'] == RESOURCE_TRANSFORM
+    if resource_value['Type'] == STACK_TRANSFORM
     for file in [lookup_template(resource_value['Template'], template_paths)]
   ]
   # Merge transforms
@@ -118,6 +148,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
         for key in output.get(section, {}).keys():
           output[section][name+key] = output[section].pop(key)
           search_and_replace(output, key, name+key)
+
       # Process parameters
       for output_param_key, output_param_value in output_parameters.iteritems():
         # Get corresponding transform property
@@ -139,7 +170,21 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
 
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
-  return data
+    return { 
+      k: data[k] 
+      for k in [
+        'AWSTemplateFormatVersion',
+        'Description',
+        'Metadata',
+        'Parameters',
+        'Mappings',
+        'Conditions',
+        'Transform',
+        'Resources',
+        'Outputs'
+      ]
+      if k in data.keys()
+    }
 
 def property_transform(data, filter_paths=[]):
   # Load Ansible filters

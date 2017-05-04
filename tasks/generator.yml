@@ -29,11 +29,11 @@
     - name: apply stack property transforms
       set_fact:
         Stack: "{{ Stack | property_transform(filter_paths=[role_path + '/filter_plugins']) }}"
-    - name: apply stack resource transforms
+    - name: apply stack transforms
       set_fact:
-        Stack: "{{ Stack | stack_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
+        cf_stack_output: "{{ Stack | stack_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
     - name: output stack
-      copy: content={{ cf_stack_template_vars | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
+      copy: content={{ cf_stack_output | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
       changed_when: False
     - name: generate stack policy
       copy: content={{ cf_stack_policy | to_json }} dest={{ cf_stack_policy_json }}
