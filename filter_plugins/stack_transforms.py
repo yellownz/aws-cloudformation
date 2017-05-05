@@ -167,9 +167,8 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
         'Conditions': output['Conditions'],
         'Outputs': output['Outputs']
       }
-    if transform_data:
-      data = combine(data,transform_data,recursive=True)
-      del data['Resources'][transform['name']]
+    data = combine(data,transform_data,recursive=True)
+    del data['Resources'][transform['name']]
   return { 
     k: data[k] 
     for k in [
