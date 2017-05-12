@@ -163,9 +163,10 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
       for key,value in output.get('Outputs', {}).iteritems():
         search_and_replace(data,'%s.%s' % (name, key.split(name)[-1]), value['Value'], as_value=True)
       transform_data = { 
-        'Resources': output['Resources'],
-        'Conditions': output['Conditions'],
-        'Outputs': output['Outputs']
+        'Resources': output.get('Resources', {}),
+        'Mappings': output.get('Mappings', {}),
+        'Conditions': output.get('Conditions', {}),
+        'Outputs': output.get('Outputs', {})
       }
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
