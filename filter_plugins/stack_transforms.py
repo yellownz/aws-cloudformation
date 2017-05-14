@@ -13,8 +13,26 @@ class FilterModule(object):
   def filters(self):
     return {
         'property_transform': property_transform,
-        'stack_transform': stack_transform
+        'stack_transform': stack_transform,
+        'stack_output': stack_output
     }
+
+def stack_output(data):
+  return { 
+    k: data[k] 
+    for k in [
+      'AWSTemplateFormatVersion',
+      'Description',
+      'Metadata',
+      'Parameters',
+      'Mappings',
+      'Conditions',
+      'Transform',
+      'Resources',
+      'Outputs'
+    ]
+    if k in data.keys()
+  }
 
 def lookup_template(file, template_paths=os.getcwd()):
   template_file = next((
