@@ -87,6 +87,20 @@ Parameters:
     Default: Default
 
 Conditions:
+  T2InstanceType:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: InstanceType
+        - db.t2.micro
+      - Fn::Equals:
+        - Ref: InstanceType
+        - db.t2.small
+      - Fn::Equals:
+        - Ref: InstanceType
+        - db.t2.medium
+      - Fn::Equals:
+        - Ref: InstanceType
+        - db.t2.large
   MultiAzEnabled:
     Fn::Or:
       - Fn::Equals:
@@ -273,12 +287,47 @@ Resources:
         Ref: IngressSecurityGroup
       DestinationSecurityGroupId:
         Ref: SecurityGroup
+  CPUCreditBalance:
+    Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceType
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} low CPU credit balance
+      MetricName: CPUCreditBalance
+      Namespace: AWS/RDS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value:
+            Ref: DbInstance
   CPUUtilization:
     Type: AWS::CloudWatch::Alarm
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: RDS Instance CPU utilization check
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} low CPU utilization check
       MetricName: CPUUtilization
       Namespace: AWS/RDS
       Statistic: Average
@@ -301,12 +350,17 @@ Resources:
         - CloudwatchAlarmsTopicExists
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value:
+            Ref: DbInstance
   FreeStorageSpace:
     Type: AWS::CloudWatch::Alarm
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: RDS Instance free storage space check
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} free storage space check
       MetricName: FreeStorageSpace
       Namespace: AWS/RDS
       Statistic: Minimum
@@ -329,12 +383,17 @@ Resources:
         - CloudwatchAlarmsTopicExists
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value:
+            Ref: DbInstance
   FreeableMemory:
     Type: AWS::CloudWatch::Alarm
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: RDS Instance freeable memory check
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} freeable memory check
       MetricName: FreeableMemory
       Namespace: AWS/RDS
       Statistic: Minimum
@@ -357,6 +416,10 @@ Resources:
         - CloudwatchAlarmsTopicExists
         - Ref: CloudwatchAlarms
         - Ref: AWS::NoValue
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value:
+            Ref: DbInstance
   Connections:
     Type: AWS::CloudWatch::Alarm
     DependsOn:
