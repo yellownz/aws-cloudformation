@@ -146,7 +146,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
       'output': render_template(os.path.basename(file), os.path.dirname(file), resource_value, filters) 
     }
     for resource_key, resource_value in data['Resources'].iteritems() 
-    if resource_value['Type'] == STACK_TRANSFORM
+    if resource_value.get('Type') == STACK_TRANSFORM
     for file in [lookup_template(resource_value['Template'], template_paths)]
   ]
   # Merge transforms
