@@ -6,6 +6,10 @@ Parameters:
   Name:
     Type: String
     Description: Name of load balancer
+  AllowedCidr:
+    Type: String
+    Description: CIDR range allowed access to Load Balancer Listener(s)
+    Default: NONE
   AzCount:
     Type: Number
     Description: Number of AZs to deploy
@@ -29,19 +33,6 @@ Parameters:
     Type: Number
     Description: Connection idle timeout in seconds
     Default: 30
-  CustomSecurityGroup:
-    Type: String
-    Description: Custom load balancer security group Id to attach to load balancer
-    Default: ""
-  CustomSecurityGroupEnabled:
-    Type: String
-    Description: Enables a custom security group
-    Default: "False"
-    AllowedValues:
-      - "False"
-      - "false"
-      - "True"
-      - "true"
   DeleteProtectionEnabled:
     Type: String
     Description: Enables or disables delete protection
@@ -100,25 +91,38 @@ Parameters:
     AllowedValues:
       - HTTP
       - HTTPS
+  TargetSecurityGroup:
+    Type: String
+    Description: Default target security group
   VpcName:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC
     Default: Default
 
 Conditions:
-  CustomSecurityGroupDefined:
-    Fn::Or:
-      - Fn::Equals:
-        - Ref: CustomSecurityGroupEnabled
-        - "True"
-      - Fn::Equals:
-        - Ref: CustomSecurityGroupEnabled
-        - "true"
   CloudwatchAlarmsTopicExists:
     Fn::Not:
       - Fn::Equals:
         - Ref: CloudwatchAlarms
         - ""
+  AllowHttp:
+    Fn::And:
+      - Condition: HttpEnabled
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: AllowedCidr
+          - NONE
+  AllowHttps:
+    Fn::And:
+      - Condition: HttpsEnabled
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: AllowedCidr
+          - NONE
+  AllowHttpAndHttps:
+    Fn::And:
+      - Condition: AllowHttp
+      - Condition: AllowHttps
   HttpEnabled:
     Fn::Not:
       - Fn::Equals:
@@ -162,11 +166,7 @@ Resources:
       Scheme:
         Ref: Scheme
       SecurityGroups:
-        Fn::If:
-          - CustomSecurityGroupDefined
-          - - Ref: SecurityGroup
-            - Ref: CustomSecurityGroup
-          - - Ref: SecurityGroup
+        - Ref: SecurityGroup
       Subnets:
         Fn::If:
           - ThreeAzCondition
@@ -195,7 +195,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 
-        Fn::Sub: ${AWS::StackName} ${Name} Security Group
+        Fn::Sub: ${AWS::StackName} ${Name} Http Listener Security Group
       VpcId:
         Fn::ImportValue:
           Fn::Sub: ${VpcName}VpcId
@@ -205,18 +205,41 @@ Resources:
           ToPort: -1
           CidrIp: 192.0.2.0/32
       SecurityGroupIngress:
-        - IpProtocol: icmp
-          FromPort : -1
-          ToPort : -1
-          CidrIp:
-              Fn::ImportValue:
-                Fn::Sub: ${VpcName}ManagementSubnetACidr
-        - IpProtocol: icmp
-          FromPort : -1
-          ToPort : -1
-          CidrIp:
-              Fn::ImportValue:
-                Fn::Sub: ${VpcName}ManagementSubnetBCidr
+        Fn::If:
+          - AllowHttpAndHttps
+          - - IpProtocol: tcp
+              FromPort:
+                Ref: HttpPort
+              ToPort:
+                Ref: HttpPort
+              CidrIp:
+                Ref: AllowedCidr
+            - IpProtocol: tcp
+              FromPort:
+                Ref: HttpsPort
+              ToPort:
+                Ref: HttpsPort
+              CidrIp:
+                Ref: AllowedCidr
+          - Fn::If:
+            - AllowHttp
+            - - IpProtocol: tcp
+                FromPort:
+                  Ref: HttpPort
+                ToPort:
+                  Ref: HttpPort
+                CidrIp:
+                  Ref: AllowedCidr
+            - Fn::If:
+              - AllowHttps
+              - - IpProtocol: tcp
+                  FromPort:
+                    Ref: HttpsPort
+                  ToPort:
+                    Ref: HttpsPort
+                  CidrIp:
+                    Ref: AllowedCidr
+              - Ref: AWS::NoValue
       Tags:
         - Key: Name
           Value:
@@ -266,6 +289,30 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value:
             Ref: ConnectionDrainTimeout
+  ToTargetGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetGroupPort
+      ToPort:
+        Ref: TargetGroupPort
+      GroupId:
+        Ref: TargetSecurityGroup
+      SourceSecurityGroupId:
+        Ref: SecurityGroup
+  ToTargetGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetGroupPort
+      ToPort:
+        Ref: TargetGroupPort
+      GroupId:
+        Ref: SecurityGroup
+      DestinationSecurityGroupId:
+        Ref: TargetSecurityGroup
   LoadBalancerTargetResponseTime:
     Type: AWS::CloudWatch::Alarm
     Condition: LoadBalancerMetricsEnabled
