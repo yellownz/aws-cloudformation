@@ -178,14 +178,17 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
           if output_param_value.get('Default') is None:
             raise AnsibleError("Transform parameter %s is missing associated transform property and default value" % output_param_key)
           search_and_replace(output, output_param_key, output_param_value['Default'], as_value=True)
-      # Rename main stack references to transform resource
-      for key,value in output.get('Outputs', {}).iteritems():
-        search_and_replace(data,'%s.%s' % (name, key.split(name)[-1]), value['Value'], as_value=True)
-      transform_data = { 
-        'Resources': output.get('Resources', {}),
-        'Mappings': output.get('Mappings', {}),
-        'Conditions': output.get('Conditions', {})
-      }
+  # Rename main stack references to transform resource
+  for transform in transforms:
+    name = transform['name']
+    output = transform['output']
+    for key,value in output.get('Outputs', {}).iteritems():
+      search_and_replace(data,'%s.%s' % (name, key.split(name)[-1]), value['Value'], as_value=True)
+    transform_data = { 
+      'Resources': output.get('Resources', {}),
+      'Mappings': output.get('Mappings', {}),
+      'Conditions': output.get('Conditions', {})
+    }
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
   return data
