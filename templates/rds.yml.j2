@@ -31,6 +31,9 @@ Parameters:
   EngineVersion:
     Type: String
     Description: Database version
+  IngressSecurityGroup:
+    Type: String
+    Description: Ingress security group that will be granted access to database
   InstanceType:
     Type: String
     Description: Database instance class
@@ -230,6 +233,42 @@ Resources:
           CidrIp:
             Fn::ImportValue:
               Fn::Sub: ${VpcName}ManagementSubnetBCidr
+  ToDatabaseIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Fn::FindInMap:
+          - RdsPortMappings
+          - Ref: Engine
+          - port
+      ToPort:
+        Fn::FindInMap:
+          - RdsPortMappings
+          - Ref: Engine
+          - port
+      GroupId:
+        Ref: SecurityGroup
+      SourceSecurityGroupId:
+        Ref: IngressSecurityGroup
+  ToDatabaseEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Fn::FindInMap:
+          - RdsPortMappings
+          - Ref: Engine
+          - port
+      ToPort:
+        Fn::FindInMap:
+          - RdsPortMappings
+          - Ref: Engine
+          - port
+      GroupId:
+        Ref: IngressSecurityGroup
+      DestinationSecurityGroupId:
+        Ref: SecurityGroup
   CPUUtilization:
     Type: AWS::CloudWatch::Alarm
     DependsOn:
