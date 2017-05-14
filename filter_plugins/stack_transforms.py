@@ -167,8 +167,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
       transform_data = { 
         'Resources': output.get('Resources', {}),
         'Mappings': output.get('Mappings', {}),
-        'Conditions': output.get('Conditions', {}),
-        'Outputs': output.get('Outputs', {})
+        'Conditions': output.get('Conditions', {})
       }
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
