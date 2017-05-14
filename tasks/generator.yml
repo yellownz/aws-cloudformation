@@ -19,6 +19,9 @@
     - name: merge template into Stack variable
       set_fact:
         Stack: "{{ cf_stack_template_vars | combine(Stack, recursive=True) }}"
+    - name: apply stack transforms
+      set_fact:
+        Stack: "{{ Stack | stack_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
     - name: merge stack globals
       set_fact:
         Stack: "{{ Stack | combine({ 'Resources': Stack.Resources | dict_override(cf_stack_globals)}, recursive=True) }}"
@@ -29,11 +32,8 @@
     - name: apply stack property transforms
       set_fact:
         Stack: "{{ Stack | property_transform(filter_paths=[role_path + '/filter_plugins']) }}"
-    - name: apply stack transforms
-      set_fact:
-        cf_stack_output: "{{ Stack | stack_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
     - name: output stack
-      copy: content={{ cf_stack_output | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
+      copy: content={{ Stack | stack_output | to_nice_yaml(indent=2) }} dest={{ cf_stack_template_yaml }}
       changed_when: False
     - name: generate stack policy
       copy: content={{ cf_stack_policy | to_json }} dest={{ cf_stack_policy_json }}

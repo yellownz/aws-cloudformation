@@ -188,21 +188,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
       }
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
-  return { 
-    k: data[k] 
-    for k in [
-      'AWSTemplateFormatVersion',
-      'Description',
-      'Metadata',
-      'Parameters',
-      'Mappings',
-      'Conditions',
-      'Transform',
-      'Resources',
-      'Outputs'
-    ]
-    if k in data.keys()
-  }
+  return data
 
 def property_transform(data, filter_paths=[]):
   # Load Ansible filters
