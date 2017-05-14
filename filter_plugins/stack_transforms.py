@@ -137,8 +137,7 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
     resource = transform['resource']
     resource_properties = resource['Properties']
     output = transform['output']
-    output_parameters = output.get('Parameters')
-    output_parameters = output.get('Parameters')
+    output_parameters = output.get('Parameters', {})
     creation_policy = resource.get('CreationPolicy') or "Component"
     if creation_policy == "Child":
       # TODO - handle child stack creation logic
