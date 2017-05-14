@@ -46,10 +46,6 @@ Parameters:
   DnsDomain:
     Type: String
     Description: Domain portion of FQDN of load balancer
-  HealthCheckPath:
-    Type: String
-    Description: Health check path of target group application
-    Default: /
   HttpPort:
     Type: Number
     Description: Load balancer HTTP listener port
@@ -91,6 +87,10 @@ Parameters:
     AllowedValues:
       - HTTP
       - HTTPS
+  TargetGroupHealthCheck:
+    Type: String
+    Description: Health check path of default target group
+    Default: /
   TargetSecurityGroup:
     Type: String
     Description: Default target security group
@@ -284,7 +284,7 @@ Resources:
       Port:
         Ref: TargetGroupPort
       HealthCheckPath:
-        Ref: HealthCheckPath
+        Ref: TargetGroupHealthCheck
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value:
