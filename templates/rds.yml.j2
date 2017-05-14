@@ -1,0 +1,455 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: RDS Stack
+
+Parameters:
+  AllocatedStorage:
+    Type: Number
+    Description: Database storage
+    Default: 10
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: ""
+  DnsHostname:
+    Type: String
+    Description: Hostname portion of FQDN of the database instance
+  DnsDomain:
+    Type: String
+    Description: Domain portion of FQDN of the database instance
+  ParameterGroup:
+    Type: String
+    Description: ARN of database parameter group
+    Default: ""
+  Engine:
+    Type: String
+    Description: Database engine
+    AllowedValues:
+      - mysql
+      - postgres
+      - aurora
+  EngineVersion:
+    Type: String
+    Description: Database version
+  InstanceType:
+    Type: String
+    Description: Database instance class
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t2.micro
+      - db.t2.small
+      - db.t2.medium
+      - db.t2.large
+      - db.m4.large
+      - db.m4.xlarge
+      - db.r3.large
+      - db.r3.xlarge
+  MasterUsername:
+    Type: String
+    Description: Database master username
+    Default: dba
+  MasterPassword:
+    Type: String
+    Description: Database master password
+    NoEcho: "True"
+  MultiAz:
+    Type: String
+    Description: Enables or disables multi AZ operation
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
+    Default: "False"
+  Name:
+    Type: String
+    Description: Name of rds instance
+    Default: ApplicationDatabase
+  Snapshot: 
+    Type: String
+    Description: ARN of database snapshot to create instance from
+    Default: ""
+  Subnets:
+    Type: String
+    Description: Subnet the RDS instance will be deployed to
+    Default: High
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC
+    Default: Default
+
+Conditions:
+  MultiAzEnabled:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: MultiAz
+        - "True"
+      - Fn::Equals:
+        - Ref: MultiAz
+        - "true"
+  ParameterGroupDefined:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: ParameterGroup
+        - ""
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - ""
+
+Resources:
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostname}.${DnsDomain}
+      TTL: 300
+      HostedZoneName: 
+        Fn::Sub: ${DnsDomain}.
+      Type: CNAME
+      Comment:
+        Fn::Sub: ${AWS::StackName} ${Name} DNS Record
+      ResourceRecords: 
+        - Fn::Sub: ${DbInstance.Endpoint.Address}
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      AllocatedStorage:
+        Ref: AllocatedStorage
+      AutoMinorVersionUpgrade: "true"
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: 12:00-14:00
+      PreferredMaintenanceWindow: sun:14:30-sun:16:00
+      StorageType: gp2
+      DBInstanceClass:
+        Ref: InstanceType
+      DBSnapshotIdentifier:
+        Ref: Snapshot
+      Engine:
+        Ref: Engine
+      EngineVersion:
+        Ref: EngineVersion
+      MasterUsername:
+        Ref: MasterUsername
+      MasterUserPassword:
+        Ref: MasterPassword
+      DBSubnetGroupName:
+        Ref: SubnetGroup
+      VPCSecurityGroups:
+        - Ref: SecurityGroup
+      MultiAZ:
+        Ref: MultiAz
+      AvailabilityZone: 
+        Fn::If:
+          - MultiAzEnabled
+          - Ref: AWS::NoValue
+          - Fn::Sub: ${AWS::Region}a
+      DBParameterGroupName:
+        Fn::If:
+        - ParameterGroupDefined
+        - Ref: ParameterGroup
+        - Ref: AWS::NoValue
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-rds
+        - Key: yellow:tech:app-role
+          Value: database
+  SubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription:
+        Fn::Sub: ${AWS::StackName} ${Name} DB Subnet Group
+      SubnetIds:
+        - Fn::ImportValue:
+            Fn::Sub: ${VpcName}${Subnets}SubnetA
+        - Fn::ImportValue:
+            Fn::Sub: ${VpcName}${Subnets}SubnetB
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Name}-db-subnet-group
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupEgress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.0.2.0/32
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort:
+            Fn::FindInMap:
+            - RdsPortMappings
+            - Ref: Engine
+            - port
+          ToPort:
+            Fn::FindInMap:
+            - RdsPortMappings
+            - Ref: Engine
+            - port
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: tcp
+          FromPort:
+            Fn::FindInMap:
+            - RdsPortMappings
+            - Ref: Engine
+            - port
+          ToPort:
+            Fn::FindInMap:
+            - RdsPortMappings
+            - Ref: Engine
+            - port
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+  CPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance CPU utilization check
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  FreeStorageSpace:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance free storage space check
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 15000000
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  FreeableMemory:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance freeable memory check
+      MetricName: FreeableMemory
+      Namespace: AWS/RDS
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 100000000
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  Connections:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance connections
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  DiskQueueDepth:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance disk queue depth
+      MetricName: DiskQueueDepth
+      Namespace: AWS/RDS
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  ReadLatency:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance read latency
+      MetricName: ReadLatency
+      Namespace: AWS/RDS
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+  WriteLatency:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - DbInstance
+    Properties:
+      AlarmDescription: RDS Instance write latency
+      MetricName: WriteLatency
+      Namespace: AWS/RDS
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+
+Mappings:
+  RdsPortMappings:
+    mysql:
+      port: 3306
+    aurora:
+      port: 3306
+    postgres:
+      port: 5432
+  
+Outputs:
+  DnsRecord:
+    Description: RDS instance DNS Record
+    Value:
+      Ref: DnsRecord
+  SecurityGroup:
+    Description: RDS instance security group ID 
+    Value:
+      Ref: SecurityGroup
+  EndPoint:
+    Description: RDS instance endpoint address
+    Value:
+      Fn::Sub: ${DbInstance.Endpoint.Address}
+  Port:
+    Description: RDS instance endpoint port
+    Value:
+      Fn::Sub: ${DbInstance.Endpoint.Port}

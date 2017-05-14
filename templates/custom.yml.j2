@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: CloudFormation Custom Resources Stack
+
+Parameters:
+  Name:
+    Type: String
+    Description: Logical name of component/stack
+  KmsDecrypterVersion:
+    Type: String
+    Description: KMS Decrypter S3 object version
+    Default: latest
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+
+Conditions:
+  KmsDecrypterLatest:
+    Fn::Equals:
+    - Ref: KmsDecrypterVersion
+    - latest
+
+Resources:
+  KMSDecrypterLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-cfnKmsDecrypt
+      RetentionInDays:
+        Ref: LogRetention
+  KMSDecrypter:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - KMSDecrypterLogGroup
+    Properties:
+      Description: 
+        Fn::Sub: ${AWS::StackName} KMS Decrypter
+      Handler: cfn_kms_decrypt.handler
+      MemorySize: 128
+      Runtime: python2.7
+      Timeout: 300
+      Role: 
+        Fn::Sub: ${KMSDecrypterRole.Arn}
+      FunctionName: 
+        Fn::Sub: ${AWS::StackName}-cfnKmsDecrypt
+      Code:
+        S3Bucket:
+          Fn::ImportValue: CfnLambdaBucket
+        S3Key: cfnKmsDecrypt.zip
+        S3ObjectVersion:
+          Fn::If:
+            - KmsDecrypterLatest
+            - Ref: AWS::NoValue
+            - Ref: KmsDecrypterVersion
+  KMSDecrypterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            sts:AssumeRole
+      Policies:
+      - PolicyName: KMSDecrypterPolicy
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: Decrypt
+            Effect: Allow
+            Action:
+            - kms:Decrypt
+            - kms:DescribeKey
+            Resource:
+              Fn::ImportValue: CfnMasterKeyArn
+          - Sid: ManageLambdaLogs
+            Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: 
+              Fn::Sub: ${KMSDecrypterLogGroup.Arn}
+
+Outputs:
+  KMSDecrypter:
+    Description: KMS Decrypter Function ARN
+    Value:
+      Fn::Sub: ${KMSDecrypter.Arn}
