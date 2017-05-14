@@ -79,7 +79,7 @@ def search_and_replace(data, search, replace, as_value=False):
         node[key] = replace
     if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
-    if key == 'Condition' and search in item and parent_key != 'Properties':
+    if key == 'Condition' and search == item and parent_key != 'Properties':
       node[key] = replace
     if key == 'DependsOn' and search in item and parent_key != 'Properties':
       node[key][item.index(search)] = replace
