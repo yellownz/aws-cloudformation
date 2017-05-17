@@ -1,0 +1,616 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Classic Elastic Load Balancer Stack
+
+Parameters:
+  Name:
+    Type: String
+    Description: Name of load balancer
+  AllowedCidr:
+    Type: String
+    Description: CIDR range allowed access to Load Balancer Listener(s)
+    Default: NONE
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 2
+      - 3
+  Certificate:
+    Type: String
+    Description: CloudFormation export that defines certificate ARN
+    Default: ""
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: ""
+  ConnectionDrainTimeout:
+    Type: Number
+    Description: Maximum time to drain connections
+    Default: 300
+  ConnectionIdleTimeout:
+    Type: Number
+    Description: Connection idle timeout in seconds
+    Default: 300
+  DnsHostname:
+    Type: String
+    Description: Hostname portion of FQDN of load balancer
+  DnsDomain:
+    Type: String
+    Description: Domain portion of FQDN of load balancer
+  HealthCheckTarget:
+    Type: String
+    Description: Health check path of target backend
+  HealthCheckHealthyThreshold:
+    Type: Number
+    Description: Minimum successful health checks to mark the target as healthy
+    Default: 2
+  HealthCheckUnhealthyThreshold: 
+    Type: Number
+    Description: Minimum failed health checks to mark the target as unhealthy
+    Default: 10
+  HealthCheckInterval: 
+    Type: Number
+    Description: Interval between health checks
+    Default: 30
+  HealthCheckTimeout: 
+    Type: Number
+    Description: Maximum time to wait for a health check to complete
+    Default: 5
+  HttpPort:
+    Type: Number
+    Description: Load balancer HTTP listener port
+    Default: 0
+  HttpsPort:
+    Type: Number
+    Description: Load balancer HTTPS listener port
+    Default: 0
+  TcpPort:
+    Type: Number
+    Description: Load balancer TCP listener port
+    Default: 0
+  Scheme:
+    Type: String
+    Description: Load balancer scheme
+    AllowedValues:
+      - internet-facing
+      - internal
+  Subnets:
+    Type: String
+    Description: Subnet the load balancer instances will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  TargetHttpPort:
+    Type: Number
+    Description: Target backend HTTP port
+    Default: 0
+  TargetHttpsPort:
+    Type: Number
+    Description: Target backend HTTPS port
+    Default: 0
+  TargetTcpPort:
+    Type: Number
+    Description: Target backend TCP port
+    Default: 0
+  TargetSecurityGroup:
+    Type: String
+    Description: Target security group
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC
+    Default: Default
+
+Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - ""
+  AllowHttp:
+    Fn::And:
+      - Condition: HttpEnabled
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: AllowedCidr
+          - NONE
+  AllowHttps:
+    Fn::And:
+      - Condition: HttpsEnabled
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: AllowedCidr
+          - NONE
+  AllowTcp:
+    Fn::And:
+      - Condition: TcpEnabled
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: AllowedCidr
+          - NONE
+  AllowHttpAndHttps:
+    Fn::And:
+      - Condition: AllowHttp
+      - Condition: AllowHttps
+  AllowHttpAndTcp:
+    Fn::And:
+      - Condition: AllowHttp
+      - Condition: AllowTcp
+  AllowHttpsAndTcp:
+    Fn::And:
+      - Condition: AllowHttps
+      - Condition: AllowTcp
+  AllowAll:
+    Fn::And:
+      - Condition: AllowHttps
+      - Condition: AllowHttp
+      - Condition: AllowTcp
+  HttpEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: HttpPort
+        - 0
+  HttpsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: HttpsPort
+        - 0
+  TcpEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: TcpPort
+        - 0
+  HttpAndTcpEnabled:
+    Fn::And:
+      - Condition: HttpEnabled
+      - Condition: TcpEnabled
+  HttpsAndTcpEnabled:
+    Fn::And:
+      - Condition: HttpsEnabled
+      - Condition: TcpEnabled
+  HttpAndHttpsEnabled:
+    Fn::And:
+      - Condition: HttpEnabled
+      - Condition: HttpsEnabled
+  AllEnabled:
+    Fn::And:
+      - Condition: HttpEnabled
+      - Condition: HttpsEnabled
+      - Condition: TcpEnabled
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+
+Resources:
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostname}.${DnsDomain}
+      TTL: 300
+      HostedZoneName:
+        Fn::Sub: ${DnsDomain}.
+      Type: CNAME
+      Comment: 
+        Fn::Sub: ${AWS::StackName} ${Name} DNS Record
+      ResourceRecords: 
+        - Fn::Sub: ${LoadBalancer.DNSName}
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Scheme:
+        Ref: Scheme
+      SecurityGroups:
+        - Ref: SecurityGroup
+      Subnets:
+        Fn::If:
+          - ThreeAzCondition
+          - - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetA
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetB
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetC
+          - - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetA
+            - Fn::ImportValue:
+                Fn::Sub: ${VpcName}${Subnets}SubnetB
+      CrossZone: "true"
+      ConnectionSettings:
+        IdleTimeout:
+          Ref: ConnectionIdleTimeout
+      ConnectionDrainingPolicy:
+        Enabled: "true"
+        Timeout:
+          Ref: ConnectionDrainTimeout
+      Listeners:
+        Fn::If:
+          - AllEnabled
+          - - LoadBalancerPort:
+                Ref: HttpPort
+              InstancePort:
+                Ref: TargetHttpPort
+              Protocol: http
+            - LoadBalancerPort:
+                Ref: HttpsPort
+              InstancePort:
+                Ref: TargetHttpsPort
+              Protocol: https
+              SSLCertificateId:
+                Ref: Certificate
+            - LoadBalancerPort:
+                Ref: TcpPort
+              InstancePort:
+                Ref: TargetTcpPort
+              Protocol: tcp
+          - Fn::If:
+            - HttpAndHttpsEnabled
+            - - LoadBalancerPort:
+                  Ref: HttpPort
+                InstancePort:
+                  Ref: TargetHttpPort
+                Protocol: http
+              - LoadBalancerPort:
+                  Ref: HttpsPort
+                InstancePort:
+                  Ref: TargetHttpsPort
+                Protocol: https
+                SSLCertificateId:
+                  Ref: Certificate
+            - Fn::If:
+              - HttpAndTcpEnabled
+              - - LoadBalancerPort:
+                    Ref: HttpPort
+                  InstancePort:
+                    Ref: TargetHttpPort
+                  Protocol: http
+                - LoadBalancerPort:
+                    Ref: TcpPort
+                  InstancePort:
+                    Ref: TargetTcpPort
+                  Protocol: tcp
+              - Fn::If: 
+                - HttpsAndTcpEnabled
+                - - LoadBalancerPort:
+                      Ref: HttpsPort
+                    InstancePort:
+                      Ref: TargetHttpsPort
+                    Protocol: https
+                    SSLCertificateId:
+                      Ref: Certificate
+                  - LoadBalancerPort:
+                      Ref: TcpPort
+                    InstancePort:
+                      Ref: TargetTcpPort
+                    Protocol: tcp
+                - Fn::If:
+                  - HttpEnabled
+                  - - LoadBalancerPort:
+                        Ref: HttpPort
+                      InstancePort:
+                        Ref: TargetHttpPort
+                      Protocol: http
+                  - Fn::If:
+                    - HttpsEnabled
+                    - - LoadBalancerPort:
+                          Ref: HttpsPort
+                        InstancePort:
+                          Ref: TargetHttpsPort
+                        Protocol: https
+                        SSLCertificateId:
+                          Ref: Certificate
+                    - - LoadBalancerPort:
+                          Ref: TcpPort
+                        InstancePort:
+                          Ref: TargetTcpPort
+                        Protocol: tcp
+      HealthCheck:
+        Target: 
+          Ref: HealthCheckTarget
+        HealthyThreshold:
+          Ref: HealthCheckHealthyThreshold
+        UnhealthyThreshold:
+          Ref: HealthCheckUnhealthyThreshold
+        Interval:
+          Ref: HealthCheckInterval
+        Timeout:
+          Ref: HealthCheckTimeout
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-ElasticLoadBalancer
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ${AWS::StackName} ${Name} Elastic Load Balancer Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupIngress:
+        Fn::If:
+          - AllowAll
+          - - IpProtocol: tcp
+              FromPort:
+                Ref: HttpPort
+              ToPort:
+                Ref: HttpPort
+              CidrIp:
+                Ref: AllowedCidr
+            - IpProtocol: tcp
+              FromPort:
+                Ref: HttpsPort
+              ToPort:
+                Ref: HttpsPort
+              CidrIp:
+                Ref: AllowedCidr
+            - IpProtocol: tcp
+              FromPort:
+                Ref: TcpPort
+              ToPort:
+                Ref: TcpPort
+              CidrIp:
+                Ref: AllowedCidr
+          - Fn::If:
+            - AllowHttpAndHttps
+            - - IpProtocol: tcp
+                FromPort:
+                  Ref: HttpPort
+                ToPort:
+                  Ref: HttpPort
+                CidrIp:
+                  Ref: AllowedCidr
+              - IpProtocol: tcp
+                FromPort:
+                  Ref: HttpsPort
+                ToPort:
+                  Ref: HttpsPort
+                CidrIp:
+                  Ref: AllowedCidr
+            - Fn::If:
+              - AllowHttpsAndTcp
+              - - IpProtocol: tcp
+                  FromPort:
+                    Ref: HttpsPort
+                  ToPort:
+                    Ref: HttpsPort
+                  CidrIp:
+                    Ref: AllowedCidr
+                - IpProtocol: tcp
+                  FromPort:
+                    Ref: TcpPort
+                  ToPort:
+                    Ref: TcpPort
+                  CidrIp:
+                    Ref: AllowedCidr
+              - Fn::If:
+                - AllowHttpAndTcp
+                - - IpProtocol: tcp
+                    FromPort:
+                      Ref: HttpPort
+                    ToPort:
+                      Ref: HttpPort
+                    CidrIp:
+                      Ref: AllowedCidr
+                  - IpProtocol: tcp
+                    FromPort:
+                      Ref: TcpPort
+                    ToPort:
+                      Ref: TcpPort
+                    CidrIp:
+                      Ref: AllowedCidr
+                - Fn::If:
+                  - AllowHttp
+                  - - IpProtocol: tcp
+                      FromPort:
+                        Ref: HttpPort
+                      ToPort:
+                        Ref: HttpPort
+                      CidrIp:
+                        Ref: AllowedCidr
+                  - Fn::If:
+                    - AllowHttps
+                    - - IpProtocol: tcp
+                        FromPort:
+                          Ref: HttpsPort
+                        ToPort:
+                          Ref: HttpsPort
+                        CidrIp:
+                          Ref: AllowedCidr
+                    - Fn::If:
+                      - AllowTcp
+                      - - IpProtocol: tcp
+                          FromPort:
+                            Ref: TcpPort
+                          ToPort:
+                            Ref: TcpPort
+                          CidrIp:
+                            Ref: AllowedCidr
+                      - Ref: AWS::NoValue
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Name}-sg
+  ToTargetHttpIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HttpEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetHttpPort
+      ToPort:
+        Ref: TargetHttpPort
+      GroupId:
+        Ref: TargetSecurityGroup
+      SourceSecurityGroupId:
+        Ref: SecurityGroup
+  ToTargetHttpEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: HttpEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetHttpPort
+      ToPort:
+        Ref: TargetHttpPort
+      GroupId:
+        Ref: SecurityGroup
+      DestinationSecurityGroupId:
+        Ref: TargetSecurityGroup
+  ToTargetHttpsIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HttpsEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetHttpsPort
+      ToPort:
+        Ref: TargetHttpsPort
+      GroupId:
+        Ref: TargetSecurityGroup
+      SourceSecurityGroupId:
+        Ref: SecurityGroup
+  ToTargetHttpsEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: HttpsEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetHttpsPort
+      ToPort:
+        Ref: TargetHttpsPort
+      GroupId:
+        Ref: SecurityGroup
+      DestinationSecurityGroupId:
+        Ref: TargetSecurityGroup
+  ToTargetTcpIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: TcpEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetTcpPort
+      ToPort:
+        Ref: TargetTcpPort
+      GroupId:
+        Ref: TargetSecurityGroup
+      SourceSecurityGroupId:
+        Ref: SecurityGroup
+  ToTargetTcpEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: TcpEnabled
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: TargetTcpPort
+      ToPort:
+        Ref: TargetTcpPort
+      GroupId:
+        Ref: SecurityGroup
+      DestinationSecurityGroupId:
+        Ref: TargetSecurityGroup
+  LoadBalancerLatency:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: elb latency check
+      MetricName: Latency
+      Namespace: AWS/ELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancerName
+          Value:
+            Ref: LoadBalancer
+  LoadBalancerUnHealthyHostCount:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb unhealthy host check
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ELB
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancerName
+          Value:
+            Ref: LoadBalancer
+  LoadBalancerHTTPCodeELB5XX:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: HTTP 5XX code check
+      MetricName: HTTPCode_ELB_5XX
+      Namespace: AWS/ELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancerName
+          Value:
+            Ref: LoadBalancer
+  LoadBalancerHTTPCodeBackend5XX:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: HTTP 5XX code backend check
+      MetricName: HTTPCode_Backend_5XX
+      Namespace: AWS/ELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancerName
+          Value:
+            Ref: LoadBalancer
+
+Outputs:
+  DnsRecord:
+    Description: Load Balancer DNS Record
+    Value:
+      Ref: DnsRecord
+  Arn:
+    Description: Load Balancer ARN
+    Value:
+      Ref: LoadBalancer
+  SecurityGroup: 
+    Description: Load Balancer Security Group
+    Value:
+      Ref: SecurityGroup
