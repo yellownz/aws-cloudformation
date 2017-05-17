@@ -751,7 +751,7 @@ Resources:
             Action:
               - lambda:InvokeFunction
             Resource:
-              Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-${Name}-cfnEcsTasks
+              Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-${Name}-ecsTasks
           - Sid: CreateLambdaLogs
             Effect: Allow
             Action:
@@ -773,11 +773,11 @@ Resources:
       Role:
         Fn::Sub: "${EcsTaskRunnerRole.Arn}"
       FunctionName: 
-        Fn::Sub: "${AWS::StackName}-${Name}-cfnEcsTasks"
+        Fn::Sub: "${AWS::StackName}-${Name}-ecsTasks"
       Code:
         S3Bucket:
           Fn::ImportValue: CfnLambdaBucket
-        S3Key: "cfnEcsTasks.zip"
+        S3Key: "ecsTasks.zip"
         S3ObjectVersion:
           Fn::If:
             - EcsTaskRunnerLatest
@@ -788,7 +788,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-cfnEcsTasks
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-ecsTasks
       RetentionInDays:
         Ref: LogRetention
 
