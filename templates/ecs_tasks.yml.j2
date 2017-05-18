@@ -6,6 +6,10 @@ Parameters:
   Name:
     Type: String
     Description: Name of ECS Task Runner
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
   Cluster:
     Type: String
     Description: ECS Cluster to run tasks on
@@ -13,6 +17,18 @@ Parameters:
     Type: String
     Description: ECS Task Runner Lambda function S3 object version
     Default: latest
+  ScheduleExpression:
+    Type: String
+    Description: Event cron or rate schedule expression
+    Default: NONE
+  StepFunctionLambdaVersion:
+    Type: String
+    Description: Invoke Step Function Lambda function S3 object version
+    Default: latest
+  TaskDefinition:
+    Type: String
+    Description: Task definition to run.  Requires ScheduleExpression to be set.
+    Default: NONE
   LogRetention:
     Type: Number
     Description: Log retention in days
@@ -20,12 +36,100 @@ Parameters:
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
 
 Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
   EcsTaskRunnerLatest:
     Fn::Equals:
-    - Ref: EcsTaskRunnerVersion
-    - latest
+      - Ref: EcsTaskRunnerVersion
+      - latest
+  StepFunctionLambdaLatest:
+    Fn::Equals:
+      - Ref: StepFunctionLambdaVersion
+      - latest
+  CreateEvent:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: ScheduleExpression
+        - NONE
 
 Resources:
+  Event:
+    Type: AWS::Events::Rule
+    Condition: CreateEvent
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ${Name} CloudWatch Event
+      ScheduleExpression: 
+        Ref: ScheduleExpression
+      Targets:
+        - Arn:
+            Fn::Sub: ${ScheduledEventFunction.Arn}
+          Id:
+            Fn::Sub: ${AWS::StackName}-${Name}-event
+          Input: 
+            Fn::Sub: >
+              {
+                "StateMachineArn": "${StateMachine}",
+                "Input": {
+                  "Cluster": "${Cluster}",
+                  "TaskDefinition": "${TaskDefinition}"
+                }
+              }
+  EventPermission:
+    Type: AWS::Lambda::Permission
+    Condition: CreateEvent
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: 
+        Ref: ScheduledEventFunction
+      Principal: events.amazonaws.com
+      SourceArn: 
+        Fn::Sub: ${Event.Arn}
+  FailedInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateEvent
+    Properties:
+      AlarmDescription: Failed invocations check
+      MetricName: FailedInvocations
+      Namespace: AWS/Events
+      Statistic: SampleCount
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: RuleName
+          Value:
+            Ref: Event
+  ThrottledRulesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateEvent
+    Properties:
+      AlarmDescription: Failed invocations check
+      MetricName: ThrottledRules
+      Namespace: AWS/Events
+      Statistic: SampleCount
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: RuleName
+          Value:
+            Ref: Event
   ScheduledEventRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -47,6 +151,67 @@ Resources:
             - states:StartExecution
             Resource:
               - Ref: StateMachine
+  ScheduledEventFunction:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - ScheduledEventFunctionLogGroup
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ${Name} Invoke State Machine Function
+      Handler: step_function.handle
+      MemorySize: 128
+      Runtime: python2.7
+      Timeout: 300
+      Role: 
+        Fn::Sub: ${ScheduledEventFunctionRole.Arn}
+      FunctionName: 
+        Fn::Sub: ${AWS::StackName}-${Name}-stepFunction
+      Code:
+        S3Bucket: 
+          Fn::Sub: ${AWS::AccountId}-cfn-lambda
+        S3Key: stepFunction.zip
+        S3ObjectVersion:
+          Fn::If:
+            - StepFunctionLambdaLatest
+            - Ref: AWS::NoValue
+            - Ref: StepFunctionLambdaVersion
+  ScheduledEventFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: InvokeStepsFunction
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Action:
+            - states:StartExecution
+            Resource:
+              - Ref: StateMachine
+          - Sid: ManageLambdaLogs
+            Effect: Allow
+            Action:
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:PutLogEvents
+            Resource: 
+              - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-${Name}-stepFunction:*:*
+  ScheduledEventFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: 
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-stepFunction
+      RetentionInDays:
+        Ref: LogRetention
   EcsCreateTaskFunction:
     Type: AWS::Lambda::Function
     DependsOn:
@@ -242,3 +407,7 @@ Outputs:
     Description: ARN of IAM role that grants permissions for CloudWatch events to schedule state machine jobs 
     Value:
       Fn::Sub: ${ScheduledEventRole.Arn}
+  ScheduledEventFunction:
+    Description: ARN of Lambda function role that invokes state machine jobs (executions)
+    Value:
+      Fn::Sub: ${ScheduledEventFunction.Arn}
