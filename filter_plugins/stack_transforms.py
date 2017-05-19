@@ -134,7 +134,7 @@ def search_and_replace(data, search, replace, as_value=False):
 
 def stack_transform(data, filter_paths=[],template_paths=[]):
   filter_paths += [os.getcwd() + '/filter_plugins']
-  template_paths += [os.getcwd() + '/templates']
+  template_paths = [os.getcwd() + '/templates'] + template_paths
   # Load Ansible filters  
   filters = ansible_filters(filter_paths)
   combine = filters['combine']
