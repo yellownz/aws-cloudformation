@@ -155,12 +155,13 @@ Conditions:
 
 Resources:
   DmesgLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: "${AWS::StackName}/ec2/${Name}/var/log/dmesg"
-      RetentionInDays: { "Ref": "LogRetention" }
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/dmesg
+      RetentionInDays:
+        Ref: LogRetention
   # DmesgLogGroupSubscription:
   #   Type: "AWS::Logs::SubscriptionFilter"
   #   Properties:
@@ -168,12 +169,13 @@ Resources:
   #     FilterPattern: ""
   #     LogGroupName: { "Ref": "DmesgLogGroup" }
   DockerLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: "${AWS::StackName}/ec2/${Name}/var/log/docker"
-      RetentionInDays: { "Ref": "LogRetention" }
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/docker
+      RetentionInDays:
+        Ref: LogRetention
   # DockerLogGroupSubscription:
   #   Type: "AWS::Logs::SubscriptionFilter"
   #   Properties:
@@ -181,12 +183,13 @@ Resources:
   #     FilterPattern: ""
   #     LogGroupName: { "Ref": "DockerLogGroup" }
   MessagesLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: "${AWS::StackName}/ec2/${Name}/var/log/messages"
-      RetentionInDays: { "Ref": "LogRetention" }
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/messages
+      RetentionInDays:
+        Ref: LogRetention
   # MessagesLogGroupSubscription:
   #   Type: "AWS::Logs::SubscriptionFilter"
   #   Properties:
@@ -194,12 +197,13 @@ Resources:
   #     FilterPattern: ""
   #     LogGroupName: { "Ref": "MessagesLogGroup" }
   EcsAgentLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: "${AWS::StackName}/ec2/${Name}/var/log/ecs-agent"
-      RetentionInDays: { "Ref": "LogRetention" }
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-agent
+      RetentionInDays:
+        Ref: LogRetention
   # EcsAgentLogGroupSubscription:
   #   Type: "AWS::Logs::SubscriptionFilter"
   #   Properties:
@@ -207,12 +211,13 @@ Resources:
   #     FilterPattern: ""
   #     LogGroupName: { "Ref": "EcsAgentLogGroup" }
   EcsInitLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: "${AWS::StackName}/ec2/${Name}/var/log/ecs-init"
-      RetentionInDays: { "Ref": "LogRetention" }
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-init
+      RetentionInDays:
+        Ref: LogRetention
   # EcsInitLogGroupSubscription:
   #   Type: "AWS::Logs::SubscriptionFilter"
   #   Properties:
