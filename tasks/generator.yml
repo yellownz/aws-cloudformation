@@ -21,7 +21,7 @@
         Stack: "{{ cf_stack_template_vars | combine(Stack, recursive=True) }}"
     - name: apply stack transforms
       set_fact:
-        Stack: "{{ Stack | stack_transform(template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
+        Stack: "{{ Stack | stack_transform(debug=debug, template_paths=[role_path + '/templates'], filter_paths=[role_path + '/filter_plugins']) }}"
     - name: merge stack globals
       set_fact:
         Stack: "{{ Stack | combine({ 'Resources': Stack.Resources | dict_override(cf_stack_globals)}, recursive=True) }}"

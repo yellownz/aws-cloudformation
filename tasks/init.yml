@@ -24,6 +24,7 @@
       cf_disable_stack_policy: "{{ Stack.DisablePolicy | default(False) | bool }}"
       cf_disable_rollback: "{{ Stack.DisableRollback | default(False) | bool }}"
       cf_upload_s3: "{{ Stack.Upload | default(False) | bool }}"
+      debug: "{{ debug | default(False) | bool }}"
       
   - name: create timestamp fact
     set_fact:
