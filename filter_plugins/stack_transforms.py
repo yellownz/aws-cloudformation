@@ -4,7 +4,9 @@ from ansible.errors import AnsibleError
 import yaml
 import os
 import re
+import logging
 
+FORMAT = "[stack_transform]: %(message)s"
 PROPERTY_TRANSFORM = 'Property::Transform'
 STACK_TRANSFORM = 'Stack::Transform'
 
@@ -95,6 +97,8 @@ def search_and_replace(data, search, replace, as_value=False):
         parent[parent_key] = replace
       else:
         node[key] = replace
+    if key in ['Fn::GetAtt'] and node == search:
+      parent[parent_key] = replace
     if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
     if key == 'Condition' and search == item and parent_key != 'Properties':
@@ -132,12 +136,19 @@ def search_and_replace(data, search, replace, as_value=False):
         walk(item, node, key)
   walk(data)
 
-def stack_transform(data, filter_paths=[],template_paths=[]):
-  filter_paths += [os.getcwd() + '/filter_plugins']
+def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
+  # Set logging level
+  if debug:
+    logging.basicConfig(level=logging.DEBUG, format=FORMAT)
+
+  # Prefer local playbook paths for filter and template lookups
+  filter_paths = [os.getcwd() + '/filter_plugins'] + filter_paths
   template_paths = [os.getcwd() + '/templates'] + template_paths
+  
   # Load Ansible filters  
   filters = ansible_filters(filter_paths)
   combine = filters['combine']
+
   # Get resource transforms - {Stack}.Resources.<Resource> where <Resource>.Type = Stack::Transform::<transform>
   transforms = [
     {
@@ -149,41 +160,65 @@ def stack_transform(data, filter_paths=[],template_paths=[]):
     if resource_value.get('Type') == STACK_TRANSFORM
     for file in [lookup_template(resource_value['Template'], template_paths)]
   ]
-  # Merge transforms
+
+  # Scan input parameters for each transform, calculate renamed parameter,
+  # and rename any references to transform outputs in main stack.
+  logging.debug("STAGE 1: RENAME MAIN STACK REFERENCES TO TRANSFORM OUTPUTS")
+  for transform in transforms:
+    name = transform['name']
+    transform_parameters = transform['output'].get('Parameters', {})
+    logging.debug("%s: Renaming input references in main stack", name)
+    for key in transform['output'].get('Outputs', {}).keys():
+      logging.debug("-> Renaming %s.%s to %s", name, key, name+key)
+      search_and_replace(data,'%s.%s' % (name, key), name+key)
+      logging.debug("-> Replacing {'Fn::GetAtt': ['%s','%s']} with %s", name, key, {'Ref': name+key})
+      search_and_replace(data, {'Fn::GetAtt': [name,key]}, {'Ref': name+key})
+
+  # Process each transform template, renaming template resources,
+  # and merging template resources into main stack.
+  logging.debug("STAGE 2: PROCESS TRANSFORM AND MERGE INTO MAIN STACK")
   for transform in transforms:
     name = transform['name']
     resource = transform['resource']
     resource_properties = resource['Properties']
     output = transform['output']
     output_parameters = output.get('Parameters', {})
-    creation_policy = resource.get('CreationPolicy') or "Component"
-    if creation_policy == "Child":
-      # TODO - handle child stack creation logic
-      raise AnsibleError("Child stacks not currently supported")
-    else:
-      # Post processing of template
-      # Rename keys in Resources, Mappings and Conditions
-      for section in ['Resources','Mappings','Conditions','Outputs']:
-        for key in output.get(section, {}).keys():
-          output[section][name+key] = output[section].pop(key)
-          search_and_replace(output, key, name+key)
 
-      # Process parameters
-      for output_param_key, output_param_value in output_parameters.iteritems():
-        # Get corresponding transform property
-        resource_property = resource_properties.get(output_param_key)
-        if resource_property:
-          search_and_replace(output, output_param_key, resource_property, as_value=True)
-        else:
-          if output_param_value.get('Default') is None:
-            raise AnsibleError("Transform parameter %s is missing associated transform property and default value" % output_param_key)
-          search_and_replace(output, output_param_key, output_param_value['Default'], as_value=True)
-  # Rename main stack references to transform resource
+    # Rename keys in Resources, Mappings, Conditions and Outputs
+    logging.debug("%s: Renaming transform references", name)
+    for section in ['Resources','Mappings','Conditions','Outputs']:
+      for key in output.get(section, {}).keys():
+        output[section][name+key] = output[section].pop(key)
+        logging.debug("-> Renaming %s to %s", key, name+key)
+        search_and_replace(output, key, name+key)
+
+    # Process input parameters
+    logging.debug("%s: Replacing transform input parameter values", name)
+    for output_param_key, output_param_value in output_parameters.iteritems():
+      # Get corresponding transform input property from main stack
+      resource_property = resource_properties.get(output_param_key)
+      if resource_property:
+        # Replace input parameter values with the transform input property value
+        logging.debug("-> Replacing %s value with %s", output_param_key, resource_property)
+        search_and_replace(output, output_param_key, resource_property, as_value=True)
+      else:
+        # Replace input parameter values with input parameter default or raise error
+        default_value = output_param_value.get('Default')
+        if default_value is None:
+          raise AnsibleError("Transform parameter %s is missing associated transform property and default value" % output_param_key)
+        logging.debug("-> Replacing %s value with %s", output_param_key, default_value)
+        search_and_replace(output, output_param_key, default_value, as_value=True)
+  
+  # Replace references to merged transform outputs with transformed output values
+  logging.debug("STAGE 3: REPLACE TRANSFORMED OUTPUT VALUES IN MAIN STACK")
   for transform in transforms:
     name = transform['name']
+    logging.debug("%s: Replacing transformed output values in main stack", name)
     output = transform['output']
     for key,value in output.get('Outputs', {}).iteritems():
-      search_and_replace(data,'%s.%s' % (name, key.split(name)[-1]), value['Value'], as_value=True)
+      replaced_value = value['Value']
+      logging.debug("-> Replacing %s value with %s", key, replaced_value)
+      search_and_replace(data, key, replaced_value, as_value=True)
     transform_data = { 
       'Resources': output.get('Resources', {}),
       'Mappings': output.get('Mappings', {}),
