@@ -250,9 +250,13 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   logging.debug("STAGE 3: REPLACE TRANSFORMED OUTPUT VALUES IN MAIN STACK")
   for transform in transforms:
     name = transform['name']
-    dependency_mapping = transform['output'].get('Metadata',{}).get('Stack::Transform',{}).get('DefaultDependencyMappings',[None])[0]
-    logging.debug("%s: Replacing transformed output values in main stack", name)
     output = transform['output']
+    dependency_mapping = output.get('Metadata',{}).get('Stack::Transform',{}).get('DefaultDependencyMappings',[None])[0]
+    dependencies = transform['resource'].get('DependsOn')
+    if dependencies and dependency_mapping:
+      logging.debug("%s: Attaching 'DependsOn: %s' to default resource %s", name, dependencies, name+dependency_mapping)
+      output['Resources'][name+dependency_mapping]['DependsOn'] = dependencies
+    logging.debug("%s: Replacing transformed output values in main stack", name)
     for key,value in output.get('Outputs', {}).iteritems():
       replaced_value = value['Value']
       logging.debug("--> Replacing %s value with %s", key, replaced_value)
