@@ -510,22 +510,22 @@ Outputs:
     Description: Load Balancer DNS Record
     Value:
       Ref: DnsRecord
-  Arn:
-    Description: Load Balancer ARN
+  LoadBalancer:
+    Description: Load Balancer Resource
     Value:
       Ref: LoadBalancer
   HttpListener:
-    Description: HTTP Listener ARN
+    Description: HTTP Listener Resource
     Condition: HttpEnabled
     Value:
       Ref: HttpListener
   HttpsListener:
-    Description: HTTPS Listener ARN
+    Description: HTTPS Listener Resource
     Condition: HttpsEnabled
     Value:
       Ref: HttpsListener
   TargetGroup:
-    Description: Default Target Group ARN
+    Description: Default Target Group Resource
     Value: 
       Ref: TargetGroup
   SecurityGroup: 

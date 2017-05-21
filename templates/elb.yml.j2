@@ -45,11 +45,11 @@ Parameters:
   HealthCheckHealthyThreshold:
     Type: Number
     Description: Minimum successful health checks to mark the target as healthy
-    Default: 2
+    Default: 10
   HealthCheckUnhealthyThreshold: 
     Type: Number
     Description: Minimum failed health checks to mark the target as unhealthy
-    Default: 10
+    Default: 2
   HealthCheckInterval: 
     Type: Number
     Description: Interval between health checks
@@ -606,8 +606,8 @@ Outputs:
     Description: Load Balancer DNS Record
     Value:
       Ref: DnsRecord
-  Arn:
-    Description: Load Balancer ARN
+  LoadBalancer:
+    Description: Load Balancer Resource
     Value:
       Ref: LoadBalancer
   SecurityGroup: 
