@@ -250,6 +250,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   logging.debug("STAGE 3: REPLACE TRANSFORMED OUTPUT VALUES IN MAIN STACK")
   for transform in transforms:
     name = transform['name']
+    dependency_mapping = transform['output'].get('Metadata',{}).get('Stack::Transform',{}).get('DefaultDependencyMappings',[None])[0]
     logging.debug("%s: Replacing transformed output values in main stack", name)
     output = transform['output']
     for key,value in output.get('Outputs', {}).iteritems():
@@ -263,6 +264,10 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     }
     data = combine(data,transform_data,recursive=True)
     del data['Resources'][transform['name']]
+    # Finally replace any DependsOn references to transform with the default dependency mapping
+    if dependency_mapping:
+      logging.debug("%s: Replacing '%s' dependencies with default mapping %s", name, name, name+dependency_mapping)
+      search_and_replace(data, name, name+dependency_mapping, as_value=True)
   return data
 
 def property_transform(data, filter_paths=[]):
