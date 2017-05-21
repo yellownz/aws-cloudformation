@@ -199,9 +199,9 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     transform_parameters = transform['output'].get('Parameters', {})
     logging.debug("%s: Renaming input references in main stack", name)
     for key in transform['output'].get('Outputs', {}).keys():
-      logging.debug("-> Renaming %s.%s to %s", name, key, name+key)
+      logging.debug("--> Renaming %s.%s to %s", name, key, name+key)
       search_and_replace(data,'%s.%s' % (name, key), name+key)
-      logging.debug("-> Replacing {'Fn::GetAtt': ['%s','%s']} with %s", name, key, {'Ref': name+key})
+      logging.debug("--> Replacing {'Fn::GetAtt': ['%s','%s']} with %s", name, key, {'Ref': name+key})
       search_and_replace(data, {'Fn::GetAtt': [name,key]}, {'Ref': name+key})
 
   # Process each transform template, renaming template resources,
@@ -236,14 +236,14 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
       resource_property = resource_properties.get(output_param_key)
       if resource_property:
         # Replace input parameter values with the transform input property value
-        logging.debug("-> Replacing %s value with %s", output_param_key, resource_property)
+        logging.debug("--> Replacing %s value with %s", output_param_key, resource_property)
         search_and_replace(output, output_param_key, resource_property, as_value=True)
       else:
         # Replace input parameter values with input parameter default or raise error
         default_value = output_param_value.get('Default')
         if default_value is None:
           raise AnsibleError("Transform parameter %s is missing associated transform property and default value" % output_param_key)
-        logging.debug("-> Replacing %s value with %s", output_param_key, default_value)
+        logging.debug("--> Replacing %s value with %s", output_param_key, default_value)
         search_and_replace(output, output_param_key, default_value, as_value=True)
   
   # Replace references to merged transform outputs with transformed output values
@@ -255,7 +255,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     output = transform['output']
     for key,value in output.get('Outputs', {}).iteritems():
       replaced_value = value['Value']
-      logging.debug("-> Replacing %s value with %s", key, replaced_value)
+      logging.debug("--> Replacing %s value with %s", key, replaced_value)
       search_and_replace(data, key, replaced_value, as_value=True)
     transform_data = { 
       'Resources': output.get('Resources', {}),
