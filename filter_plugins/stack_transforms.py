@@ -99,6 +99,9 @@ def search_and_replace(data, search, replace, as_value=False):
         node[key] = replace
     if key in ['Fn::GetAtt'] and node == search:
       parent[parent_key] = replace
+    if key in ['Fn::If'] and item[0] == search and re.match('\$\[(\d)\]',replace):
+      index = int(re.match('\$\[(\d)\]',replace).group(1))
+      parent[parent_key] = node[key][index]
     if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
     if key == 'Condition' and search == item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
@@ -108,7 +111,6 @@ def search_and_replace(data, search, replace, as_value=False):
     if key == 'Fn::Sub' and '${%s' % search in item:
       replace_value = str(replace)
       if as_value:
-        replace_value = replace
         if type(replace) is dict and 'Ref' in replace.keys():
           replace_value = '${%s}' % replace['Ref']
           node[key] = item.replace('${%s}' % search, replace_value)
@@ -126,7 +128,7 @@ def search_and_replace(data, search, replace, as_value=False):
         else:
           node[key] = item.replace('${%s}' % search, replace_value)
       else:
-        node[key] = item.replace('${%s' % search, '${%s' % replace)
+        node[key] = item.replace('${%s' % search, '${%s' % replace_value)
   def walk(node, parent=[None], parent_key=0):
     if type(node) is list:
       for index, item in enumerate(node):
@@ -136,6 +138,33 @@ def search_and_replace(data, search, replace, as_value=False):
         parse(key, item, node, parent, parent_key)
         walk(item, node, key)
   walk(data)
+
+def find_in_sub(search, values):
+  if search:
+    return [v for v in values if search.find('${%s' % v) >= 0]
+  else:
+    return []
+
+def fix_conditions(data, transform, input_parameter_key, input_parameter_value, resource_property):
+  resource_keys = data['Resources'].keys()
+  if not isinstance(resource_property, dict):
+    return
+  if (resource_property.get('Ref') in resource_keys or
+      resource_property.get('Fn::GetAtt') or 
+      resource_property.get('Fn::ImportValue') or
+      find_in_sub(resource_property.get('Fn::Sub'),resource_keys)):
+    # Find any conditions that reference the trasnform input parameter and use Fn::Not/Fn::Equals pattern
+    conditions = [
+      c for c,v in transform.get('Conditions',{}).iteritems() 
+      if v.get('Fn::Not') and v['Fn::Not'][0].get('Fn::Equals',[{}])[0].get('Ref') == input_parameter_key
+    ]
+    for c in conditions:
+      logging.debug("--> Removing and evaluating condition %s as True because it references an illegal input value %s", c, resource_property)
+      # Remove the condition
+      del transform['Conditions'][c]
+      # Transform conditionals to 'True' result
+      search_and_replace(transform, c, '$[1]')
+
 
 def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   # Set logging level
@@ -190,8 +219,15 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     for section in ['Resources','Mappings','Conditions','Outputs']:
       for key in output.get(section, {}).keys():
         output[section][name+key] = output[section].pop(key)
-        logging.debug("-> Renaming %s to %s", key, name+key)
+        logging.debug("--> Renaming %s to %s", key, name+key)
         search_and_replace(output, key, name+key)
+
+    # Fix conditions that will result in illegally referencing a resource
+    logging.debug("%s: Evaluating conditions that reference a resource or stack export", name)
+    for output_param_key, output_param_value in output_parameters.iteritems():
+      resource_property = resource_properties.get(output_param_key)
+      if resource_property:
+        fix_conditions(data, output, output_param_key, output_param_value, resource_property)
 
     # Process input parameters
     logging.debug("%s: Replacing transform input parameter values", name)
