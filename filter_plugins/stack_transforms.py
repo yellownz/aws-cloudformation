@@ -101,11 +101,12 @@ def search_and_replace(data, search, replace, as_value=False):
       parent[parent_key] = replace
     if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
-    if key == 'Condition' and search == item and parent_key != 'Properties':
+    if key == 'Condition' and search == item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
       node[key] = replace
-    if key == 'DependsOn' and search in item and parent_key != 'Properties':
+    if key == 'DependsOn' and search in item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
       node[key][item.index(search)] = replace
     if key == 'Fn::Sub' and '${%s' % search in item:
+      replace_value = str(replace)
       if as_value:
         replace_value = replace
         if type(replace) is dict and 'Ref' in replace.keys():
