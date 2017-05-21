@@ -64,33 +64,45 @@ Parameters:
     Type: Number
     Description: Maximum autoscaling group size 
     Default: 4
-  ProxyEnabled:
+  NfsHostUrl:
     Type: String
-    Description: Enables proxy support - requires ProxyUrl to be set
-    Default: "False"
-    AllowedValues:
-      - "True"
-      - "true"
-      - "False"
-      - "false"
+    Description: NFS host URL including mount path.  Requires NfsMount to be specified.
+    Default: NONE
+  NfsMount:
+    Type: String
+    Description: Path for NFS mount.  Requires NfsHostUrl to be specified.
+    Default: NONE
+  NfsUserId:
+    Type: Number
+    Description: User Id that owns NFS mount.  Requires NfsHostUrl and NfsMount to be specified.
+    Default: 0
   ProxyUrl:
     Type: String
-    Description: Defines proxy URL
+    Description: Defines proxy URL.  A blank string will disable proxy operation.
     Default: ""
   Subnets:
     Type: String
     Description: Subnet the autoscaling group instances will be deployed to
     AllowedValues:
-      - "Medium"
-      - "High"
-      - "Management"
-      - "Public"
+      - Medium
+      - High
+      - Management
+      - Public
+  TimeZone:
+    Type: String
+    Description: Time Zone to set in EC2 instances
+    Default: America/Los_Angeles
   VpcName:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC name
-    Default: "Default"
+    Default: Default
 
 Conditions:
+  NfsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: NfsMount
+        - NONE
   T2InstanceType:
     Fn::Or:
       - Fn::Equals:
@@ -116,13 +128,10 @@ Conditions:
       - Ref: AzCount
       - 3
   ProxyEnabledCondition:
-    Fn::Or:
+    Fn::Not:
       - Fn::Equals:
-        - Ref: ProxyEnabled
-        - "True"
-      - Fn::Equals:
-        - Ref: ProxyEnabled
-        - "true"
+        - Ref: ProxyUrl
+        - ""
   SingleInstanceCondition:
     Fn::Equals:
       - Ref: DesiredCount
@@ -131,13 +140,13 @@ Conditions:
     Fn::Or:
       - Fn::Equals:
         - Ref: Subnets
-        - "Frontend"
+        - Frontend
       - Fn::Equals:
           - Ref: Subnets
-          - "Public"
+          - Public
   NoBlockDeviceCondition:
     Fn::Equals:
-      - Ref: "BlockDeviceStorage"
+      - Ref: BlockDeviceStorage
       - 0
   CloudwatchAlarmsTopicExists:
     Fn::Not:
@@ -225,31 +234,72 @@ Resources:
   #     FilterPattern: ""
   #     LogGroupName: { "Ref": "EcsInitLogGroup" }
   LaunchConfiguration:
-    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          commands:
-            10_first_run:
-              command: "sh firstrun.sh"
-              env:
-                STACK_NAME: { "Ref": "AWS::StackName" }
-                AUTOSCALING_GROUP: { "Ref": "Name" }
-                AWS_DEFAULT_REGION: {"Ref": "AWS::Region"}
-                ECS_CLUSTER: { "Ref": "EcsCluster" }
-                DOCKER_NETWORK_MODE: { "Ref": "DockerNetworkMode" }
-                PROXY_URL:
-                  Fn::If:
-                    - "ProxyEnabledCondition"
-                    - Ref: ProxyUrl
-                    - ""
-              cwd: "/home/ec2-user/"
+      Fn::If:
+        - NfsEnabled
+        - AWS::CloudFormation::Init:
+            config:
+              commands:
+                10_mount_create:
+                  command:
+                    Fn::Sub: mkdir -p ${NfsMount}
+                11_mount_fstab:
+                  command:
+                    Fn::Sub: echo -e "${NfsHostUrl} ${NfsMount} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+                12_mount_efs:
+                  command:
+                    Fn::Sub: mount -a
+                13_mount_permissions:
+                  command:
+                    Fn::Sub: chown ${NfsUserId}:${NfsUserId} ${NfsMount}
+                20_first_run:
+                  command: sh firstrun.sh
+                  env:
+                    STACK_NAME:
+                      Ref: AWS::StackName
+                    AUTOSCALING_GROUP:
+                      Ref: Name
+                    AWS_DEFAULT_REGION:
+                      Ref: AWS::Region
+                    ECS_CLUSTER:
+                      Ref: EcsCluster
+                    DOCKER_NETWORK_MODE:
+                      Ref: DockerNetworkMode
+                    TIME_ZONE:
+                      Ref: TimeZone
+                    PROXY_URL:
+                      Ref: ProxyUrl
+                  cwd: /home/ec2-user/
+        - AWS::CloudFormation::Init:
+            config:
+              commands:
+                10_first_run:
+                  command: sh firstrun.sh
+                  env:
+                    STACK_NAME:
+                      Ref: AWS::StackName
+                    AUTOSCALING_GROUP:
+                      Ref: Name
+                    AWS_DEFAULT_REGION:
+                      Ref: AWS::Region
+                    ECS_CLUSTER:
+                      Ref: EcsCluster
+                    DOCKER_NETWORK_MODE:
+                      Ref: DockerNetworkMode
+                    TIME_ZONE:
+                      Ref: TimeZone
+                    PROXY_URL:
+                      Ref: ProxyUrl
+                  cwd: /home/ec2-user/
     Properties:
-      ImageId: { "Ref": "ImageId" }
-      InstanceType: { "Ref": "InstanceType" }
+      ImageId: 
+        Ref: ImageId
+      InstanceType:
+        Ref: InstanceType
       AssociatePublicIpAddress:
         Fn::If:
-          - "PublicInstanceCondition"
+          - PublicInstanceCondition
           - "true"
           - "false"
       BlockDeviceMappings:
@@ -258,13 +308,16 @@ Resources:
           - Ref: AWS::NoValue
           - - DeviceName: /dev/xvdf
               Ebs:
-                VolumeSize: { "Ref": "BlockDeviceStorage" }
+                VolumeSize:
+                  Ref: BlockDeviceStorage
                 VolumeType: gp2
                 DeleteOnTermination: True
-      IamInstanceProfile: { "Ref": "InstanceProfile" }
-      KeyName: { "Ref": "KeyName" }
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      KeyName:
+        Ref: KeyName
       SecurityGroups:
-        - Ref: "SecurityGroup"
+        - Ref: SecurityGroup
       UserData:
         Fn::Base64:
           Fn::If:
@@ -290,7 +343,7 @@ Resources:
                 /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
                   --resource ${Name}AutoscalingGroup --region ${AWS::Region}
   AutoscalingGroup:
-    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
       - DmesgLogGroup
       - MessagesLogGroup
@@ -323,48 +376,52 @@ Resources:
               Fn::Sub: ${VpcName}${Subnets}SubnetA
           - Fn::ImportValue:
               Fn::Sub: ${VpcName}${Subnets}SubnetB
-      LaunchConfigurationName: { "Ref" : "LaunchConfiguration" }
-      MinSize: { "Ref": "MinSize" }
-      MaxSize: { "Ref": "MaxSize" }
-      DesiredCapacity: { "Ref": "DesiredCount" }
+      LaunchConfigurationName:
+        Ref: LaunchConfiguration
+      MinSize:
+        Ref: MinSize
+      MaxSize:
+        Ref: MaxSize
+      DesiredCapacity:
+        Ref: DesiredCount
       Tags:
-        - Key: "Name"
+        - Key: Name
           Value: 
-            Fn::Sub: "${AWS::StackName}-${Name}-instance"
+            Fn::Sub: ${AWS::StackName}-${Name}-instance
           PropagateAtLaunch: "true"
   SecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 
-        Fn::Sub: "${AWS::StackName} ${Name} Security Group"
+        Fn::Sub: ${AWS::StackName} ${Name} Security Group
       VpcId:
         Fn::ImportValue:
           Fn::Sub: ${VpcName}VpcId
       SecurityGroupIngress:
-        - IpProtocol: "icmp"
-          FromPort: "-1"
-          ToPort: "-1"
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
           CidrIp:
             Fn::ImportValue: 
-              Fn::Sub: "${VpcName}ManagementSubnetACidr"
-        - IpProtocol: "icmp"
-          FromPort: "-1"
-          ToPort: "-1"
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
           CidrIp:
             Fn::ImportValue: 
-              Fn::Sub: "${VpcName}ManagementSubnetBCidr"
-        - IpProtocol: "tcp"
-          FromPort: "22"
-          ToPort: "22"
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp:
             Fn::ImportValue:
-              Fn::Sub: "${VpcName}ManagementSubnetACidr"
-        - IpProtocol: "tcp"
-          FromPort: "22"
-          ToPort: "22"
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp:
             Fn::ImportValue:
-              Fn::Sub: "${VpcName}ManagementSubnetBCidr"
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
       SecurityGroupEgress:
         Fn::If:
           - ProxyEnabledCondition
@@ -376,7 +433,7 @@ Resources:
                   - ""
                   - - Fn::ImportValue:
                         Fn::Sub: ${VpcName}VpcDnsServer
-                    - "/32"
+                    - /32
             - IpProtocol: udp
               FromPort: 123
               ToPort: 123
@@ -395,7 +452,7 @@ Resources:
                   - ""
                   - - Fn::ImportValue:
                         Fn::Sub: ${VpcName}VpcDnsServer
-                    - "/32"
+                    - /32
             - IpProtocol: udp
               FromPort: 123
               ToPort: 123
@@ -468,7 +525,6 @@ Resources:
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Path: /
       Roles:
         - Ref: InstanceRole
   EcsCluster:
@@ -812,15 +868,11 @@ Outputs:
     Description: Autoscaling Instance Role Name
     Value:
       Ref: InstanceRole
-  InstanceRoleArn:
-    Description: Autoscaling Instance Role Name ARN
-    Value:
-      Fn::Sub: ${InstanceRole.Arn}
   EcsCluster:
     Description: Autoscaling ECS Cluster
     Value:
       Ref: EcsCluster
   EcsTaskRunner:
-    Description: ECS Task Runner Function ARN
+    Description: ECS Task Runner Function
     Value:
-      Fn::Sub: ${EcsTaskRunner.Arn}
+      Ref: EcsTaskRunner
