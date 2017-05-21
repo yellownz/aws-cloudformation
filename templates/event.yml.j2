@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: CloudWatch Event Lambda Function Template
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - Event
+
 Parameters:
   Name:
     Type: String

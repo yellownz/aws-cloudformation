@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: Autoscaling Group Stack
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - AutoscalingGroup
+
 Parameters:
   Name:
     Type: String

@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: CloudFormation Custom Resources Stack
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - KMSDecrypter
+
 Parameters:
   Name:
     Type: String

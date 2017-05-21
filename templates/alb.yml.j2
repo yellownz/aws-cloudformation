@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: Application Load Balancer Stack
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - LoadBalancer
+
 Parameters:
   Name:
     Type: String

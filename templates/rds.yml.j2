@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: RDS Stack
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - DbInstance
+
 Parameters:
   AllocatedStorage:
     Type: Number

@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: ECS Task Runner Step Function Template
 
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - StateMachine
+
 Parameters:
   Name:
     Type: String
