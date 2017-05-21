@@ -38,6 +38,10 @@ Parameters:
     Type: Number
     Description: Connection idle timeout in seconds
     Default: 300
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom Security Group to attach to Load Balancer
+    Default: NONE
   DnsHostname:
     Type: String
     Description: Hostname portion of FQDN of load balancer
@@ -110,6 +114,11 @@ Parameters:
     Default: Default
 
 Conditions:
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
   CloudwatchAlarmsTopicExists:
     Fn::Not:
       - Fn::Equals:
@@ -210,7 +219,11 @@ Resources:
       Scheme:
         Ref: Scheme
       SecurityGroups:
-        - Ref: SecurityGroup
+        Fn::If:
+          - CustomSecurityGroupCondition
+          - - Ref: CustomSecurityGroup
+            - Ref: SecurityGroup
+          - - Ref: SecurityGroup
       Subnets:
         Fn::If:
           - ThreeAzCondition

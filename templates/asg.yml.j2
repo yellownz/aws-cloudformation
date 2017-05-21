@@ -26,7 +26,11 @@ Parameters:
   CloudwatchAlarms:
     Type: String
     Description: ARN of SNS topic for CloudWatch Alarms
-    Default: ""
+    Default: NONE
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom Security Group to attach to Autoscaling Group
+    Default: NONE
   DesiredCount:
     Type: Number
     Description: Autoscaling group desired instances count
@@ -103,6 +107,11 @@ Parameters:
     Default: Default
 
 Conditions:
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
   NfsEnabled:
     Fn::Not:
       - Fn::Equals:
@@ -147,8 +156,8 @@ Conditions:
         - Ref: Subnets
         - Frontend
       - Fn::Equals:
-          - Ref: Subnets
-          - Public
+        - Ref: Subnets
+        - Public
   NoBlockDeviceCondition:
     Fn::Equals:
       - Ref: BlockDeviceStorage
@@ -157,7 +166,7 @@ Conditions:
     Fn::Not:
       - Fn::Equals:
         - Ref: CloudwatchAlarms
-        - ""
+        - NONE
   EcsTaskRunnerLatest:
     Fn::Equals:
     - Ref: EcsTaskRunnerVersion
@@ -322,7 +331,11 @@ Resources:
       KeyName:
         Ref: KeyName
       SecurityGroups:
-        - Ref: SecurityGroup
+        Fn::If:
+          - CustomSecurityGroupCondition
+          - - Ref: CustomSecurityGroup
+            - Ref: SecurityGroup
+          - - Ref: SecurityGroup
       UserData:
         Fn::Base64:
           Fn::If:

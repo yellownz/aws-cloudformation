@@ -29,7 +29,7 @@ Parameters:
   CloudwatchAlarms:
     Type: String
     Description: ARN of SNS topic for CloudWatch Alarms
-    Default: ""
+    Default: NONE
   ConnectionDrainTimeout:
     Type: Number
     Description: Maximum time to drain connections
@@ -38,6 +38,10 @@ Parameters:
     Type: Number
     Description: Connection idle timeout in seconds
     Default: 30
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom Security Group to attach to Load Balancer
+    Default: NONE
   DeleteProtectionEnabled:
     Type: String
     Description: Enables or disables delete protection
@@ -105,11 +109,16 @@ Parameters:
     Default: Default
 
 Conditions:
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
   CloudwatchAlarmsTopicExists:
     Fn::Not:
       - Fn::Equals:
         - Ref: CloudwatchAlarms
-        - ""
+        - NONE
   AllowHttp:
     Fn::And:
       - Condition: HttpEnabled
@@ -171,7 +180,11 @@ Resources:
       Scheme:
         Ref: Scheme
       SecurityGroups:
-        - Ref: SecurityGroup
+        Fn::If:
+          - CustomSecurityGroupCondition
+          - - Ref: CustomSecurityGroup
+            - Ref: SecurityGroup
+          - - Ref: SecurityGroup
       Subnets:
         Fn::If:
           - ThreeAzCondition
