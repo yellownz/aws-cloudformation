@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Elastic File System (EFS) Stack
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - FileSystem
+
+Parameters:
+  Name:
+    Type: String
+    Description: Name of CloudWatch Event
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 2
+      - 3
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  IngressSecurityGroup:
+    Type: String
+    Description: Security Group permitted access to EFS
+  Subnets:
+    Type: String
+    Description: Subnet the EFS service will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC name
+    Default: Default
+
+Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Name}-efs
+  ApplicationMountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: 
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetA
+  ApplicationMountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetB
+  ApplicationMountTargetC:
+    Type: AWS::EFS::MountTarget
+    Condition: ThreeAzCondition
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetC
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupEgress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.0.2.0/32
+  ToFileSystemEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      GroupId:
+        Ref: IngressSecurityGroup
+      DestinationSecurityGroupId:
+        Ref: SecurityGroup
+  ToFileSystemIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      GroupId:
+        Ref: SecurityGroup
+      SourceSecurityGroupId:
+        Ref: IngressSecurityGroup
+Outputs:
+  FileSystem:
+    Description: File System 
+    Value:
+      Ref: FileSystem
