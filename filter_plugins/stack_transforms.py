@@ -165,7 +165,6 @@ def fix_conditions(data, transform, input_parameter_key, input_parameter_value, 
       # Transform conditionals to 'True' result
       search_and_replace(transform, c, '$[1]')
 
-
 def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   # Set logging level
   if debug:
@@ -218,9 +217,15 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     logging.debug("%s: Renaming transform references", name)
     for section in ['Resources','Mappings','Conditions','Outputs']:
       for key in output.get(section, {}).keys():
+        # Check if renamed resources will clash with main stack
+        if name+key in data.get(section, {}).keys():
+          raise AnsibleError("ERROR: The key %s in transform %s clashes with an existing resource %s" % (key, name, name+key))
         output[section][name+key] = output[section].pop(key)
         logging.debug("--> Renaming %s to %s", key, name+key)
         search_and_replace(output, key, name+key)
+
+    # Check if renamed resources will clash with main stack
+
 
     # Fix conditions that will result in illegally referencing a resource
     logging.debug("%s: Evaluating conditions that reference a resource or stack export", name)
