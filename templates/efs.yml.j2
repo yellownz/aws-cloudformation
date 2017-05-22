@@ -25,6 +25,13 @@ Parameters:
   IngressSecurityGroup:
     Type: String
     Description: Security Group permitted access to EFS
+  PerformanceMode:
+    Type: String
+    Description: EFS Performance Mode
+    Default: generalPurpose
+    AllowedValues:
+      - generalPurpose
+      - maxIO
   Subnets:
     Type: String
     Description: Subnet the EFS service will be deployed to
@@ -39,6 +46,10 @@ Parameters:
     Default: Default
 
 Conditions:
+  GeneralPerformanceMode:
+    Fn::Equals:
+      - Ref: PerformanceMode
+      - generalPurpose
   CloudwatchAlarmsTopicExists:
     Fn::Not:
       - Fn::Equals:
@@ -56,7 +67,7 @@ Resources:
         - Key: Name
           Value:
             Fn::Sub: ${AWS::StackName}-${Name}-efs
-  ApplicationMountTargetA:
+  MountTargetA:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId: 
@@ -66,7 +77,7 @@ Resources:
       SubnetId:
         Fn::ImportValue:
           Fn::Sub: ${VpcName}${Subnets}SubnetA
-  ApplicationMountTargetB:
+  MountTargetB:
     Type: AWS::EFS::MountTarget
     Properties:
       FileSystemId:
@@ -76,7 +87,7 @@ Resources:
       SubnetId:
         Fn::ImportValue:
           Fn::Sub: ${VpcName}${Subnets}SubnetB
-  ApplicationMountTargetC:
+  MountTargetC:
     Type: AWS::EFS::MountTarget
     Condition: ThreeAzCondition
     Properties:
@@ -119,6 +130,29 @@ Resources:
         Ref: SecurityGroup
       SourceSecurityGroupId:
         Ref: IngressSecurityGroup
+  PercentIOLimit:
+    Type: AWS::CloudWatch::Alarm
+    Condition: GeneralPerformanceMode
+    DependsOn:
+      - FileSystem
+    Properties:
+      AlarmDescription: I/O Percentage Limit of File System
+      MetricName: PercentIOLimit
+      Namespace: AWS/EFS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: FileSystemId
+          Value:
+            Ref: FileSystem
 Outputs:
   FileSystem:
     Description: File System 
