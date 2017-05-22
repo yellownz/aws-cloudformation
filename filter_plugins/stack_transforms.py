@@ -255,7 +255,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     dependencies = transform['resource'].get('DependsOn')
     if dependencies and dependency_mapping:
       logging.debug("%s: Attaching 'DependsOn: %s' to default resource %s", name, dependencies, name+dependency_mapping)
-      output['Resources'][name+dependency_mapping]['DependsOn'] = dependencies
+      output['Resources'][name+dependency_mapping]['DependsOn'] += dependencies
     logging.debug("%s: Replacing transformed output values in main stack", name)
     for key,value in output.get('Outputs', {}).iteritems():
       replaced_value = value['Value']
