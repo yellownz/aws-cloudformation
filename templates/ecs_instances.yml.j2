@@ -1,0 +1,1398 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Stack for ECS instances (no autoscaling)
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - InstanceA
+
+Parameters:
+  Name:
+    Type: String
+    Description: Logical name of EC2 instances
+    Default: ""
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+  BlockDeviceStorage:
+    Type: Number
+    Description: Size of additional EBS volume to attach to instances
+    Default: 0
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom security group to attach to EC2 instances, in addition to the default security group
+    Default: NONE
+  DefaultSecurityGroup:
+    Type: String
+    Description: Overrides the default security group attached to EC2 instances
+    Default: NONE
+  DockerNetworkMode:
+    Type: String
+    Description: Docker networking mode - bridge or host
+    Default: bridge
+  DnsHostInstanceA:
+    Type: String
+    Description: DNS Host Name for Instance A
+    Default: ""
+  DnsHostInstanceB:
+    Type: String
+    Description: DNS Host Name for Instance B
+    Default: ""
+  DnsHostInstanceC:
+    Type: String
+    Description: DNS Host Name for Instance C
+    Default: ""
+  DnsDomain:
+    Type: String
+    Description: DNS Domain Name
+    Default: ""
+  CreateEcsTaskRunner:
+    Type: String
+    Description: Enable/disable creation of ECS Task Runner resources
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
+  EcsTaskRunnerVersion:
+    Type: String
+    Description: ECS Task Runner Lambda function S3 object version.  Set to NONE to disable creation of ECS Task Runner resources.
+    Default: latest
+  ImageIdInstanceA:
+    Type: String
+    Description: Image ID for Instance A
+  ImageIdInstanceB:
+    Type: String
+    Description: Image ID for Instance B
+    Default: NONE
+  ImageIdInstanceC:
+    Type: String
+    Description: Image ID for Instance C
+    Default: NONE
+  InstanceType:
+    Type: String
+    Description: EC2 instance type
+    Default: t2.micro
+  FixedIpAddressInstanceA:
+    Type: String
+    Description: Fixed IP address for EC2 instance A.  Set to DYNAMIC for DHCP
+    Default: DYNAMIC
+  FixedIpAddressInstanceB:
+    Type: String
+    Description: Fixed IP address for EC2 instance B.  Set to DYNAMIC for DHCP
+    Default: DYNAMIC
+  FixedIpAddressInstanceC:
+    Type: String
+    Description: Fixed IP address for EC2 instance C.  Set to DYNAMIC for DHCP
+    Default: DYNAMIC
+  KeyName:
+    Type: String
+    Description: EC2 Key pair name
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  NfsHostUrl:
+    Type: String
+    Description: NFS host URL including mount path.  Requires NfsMount to be specified.
+    Default: NONE
+  NfsMount:
+    Type: String
+    Description: Path for NFS mount.  Requires NfsHostUrl to be specified.
+    Default: NONE
+  NfsUserId:
+    Type: Number
+    Description: User Id that owns NFS mount.  Requires NfsHostUrl and NfsMount to be specified.
+    Default: 0
+  ProxyUrl:
+    Type: String
+    Description: Defines proxy URL.  A blank string will disable proxy operation.
+    Default: ""
+  Subnets:
+    Type: String
+    Description: Subnet the EC2 instances will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  TimeZone:
+    Type: String
+    Description: Time Zone to set in EC2 instances
+    Default: America/Los_Angeles
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC name
+    Default: Default
+
+Conditions:
+  FixedIpAddressInstanceACondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: FixedIpAddressInstanceA
+        - DYNAMIC
+  FixedIpAddressInstanceBCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: FixedIpAddressInstanceB
+        - DYNAMIC
+  FixedIpAddressInstanceCCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: FixedIpAddressInstanceC
+        - DYNAMIC
+  NoDefaultSecurityGroupCondition:
+    Fn::Not:
+      - Condition: DefaultSecurityGroupCondition
+  DefaultSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: DefaultSecurityGroup
+        - NONE
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
+  DefaultAndCustomSecurityGroupCondition:
+    Fn::And:
+      - Condition: DefaultSecurityGroupCondition
+      - Condition: CustomSecurityGroupCondition
+  DefaultSecurityGroupOnlyCondition:
+    Fn::And:
+      - Condition: DefaultSecurityGroupCondition
+      - Fn::Not:
+          - Condition: CustomSecurityGroupCondition
+  CustomSecurityGroupOnlyCondition:
+    Fn::And:
+      - Condition: CustomSecurityGroupCondition
+      - Fn::Not:
+          - Condition: DefaultSecurityGroupCondition
+  NoDefaultAndCustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::And:
+        - Condition: CustomSecurityGroupCondition
+        - Condition: DefaultSecurityGroupCondition
+  NfsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: NfsMount
+        - NONE
+  T2InstanceTypeB:
+    Fn::And:
+      - Condition: T2InstanceType
+      - Condition: CreateInstanceB
+  T2InstanceTypeC:
+    Fn::And:
+      - Condition: T2InstanceType
+      - Condition: ThreeAzCondition
+  T2InstanceType:
+    Fn::Or:
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.nano
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.micro
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.small
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.medium
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.large
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.xlarge
+  CreateInstanceB:
+    Fn::Or:
+      - Condition: TwoAzCondition
+      - Condition: ThreeAzCondition
+  CreateDnsHostA:
+    Fn::And:
+      - Fn::Not:
+        - Fn::Equals:
+          - Ref: DnsHostInstanceA
+          - ""
+      - Condition: CreateDnsDomain
+  CreateDnsHostB:
+    Fn::And:
+      - Fn::Equals:
+        - Ref: DnsHostInstanceB
+        - ""
+      - Condition: CreateInstanceB
+      - Condition: CreateDnsDomain
+  CreateDnsHostC:
+    Fn::And:
+      - Fn::Equals:
+        - Ref: DnsHostInstanceC
+        - ""
+      - Condition: ThreeAzCondition
+      - Condition: CreateDnsDomain
+  CreateDnsDomain:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: DnsDomain
+        - ""
+  TwoAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 2
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+  ProxyEnabledCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: ProxyUrl
+        - ""
+  PublicInstanceCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: Subnets
+        - Frontend
+      - Fn::Equals:
+        - Ref: Subnets
+        - Public
+  NoBlockDeviceCondition:
+    Fn::Equals:
+      - Ref: BlockDeviceStorage
+      - 0
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  CreateEcsTaskRunnerCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "True"
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "true"
+  EcsTaskRunnerLatest:
+    Fn::Equals:
+    - Ref: EcsTaskRunnerVersion
+    - latest
+
+Resources:
+  DnsRecordA:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsHostA
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostInstanceA}.${DnsDomain}
+      TTL: 300
+      HostedZoneName:
+        Fn::Sub: ${DnsDomain}.
+      Type: A
+      Comment: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance A Record
+      ResourceRecords: 
+        - Fn::Sub: ${InstanceA.PrivateIp}
+  DnsRecordB:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsHostB
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostInstanceB}.${DnsDomain}
+      TTL: 300
+      HostedZoneName:
+        Fn::Sub: ${DnsDomain}.
+      Type: A
+      Comment: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance B Record
+      ResourceRecords: 
+        - Fn::Sub: ${InstanceB.PrivateIp}
+  DnsRecordC:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsHostC
+    Properties:
+      Name: 
+        Fn::Sub: ${DnsHostInstanceC}.${DnsDomain}
+      TTL: 300
+      HostedZoneName:
+        Fn::Sub: ${DnsDomain}.
+      Type: A
+      Comment: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance C Record
+      ResourceRecords: 
+        - Fn::Sub: ${InstanceC.PrivateIp}
+  DmesgLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/dmesg
+      RetentionInDays:
+        Ref: LogRetention
+  DockerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/docker
+      RetentionInDays:
+        Ref: LogRetention
+  MessagesLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/messages
+      RetentionInDays:
+        Ref: LogRetention
+  EcsAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-agent
+      RetentionInDays:
+        Ref: LogRetention
+  EcsInitLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-init
+      RetentionInDays:
+        Ref: LogRetention
+  InstanceA:
+    Metadata:
+      # Conditional dependency
+      DependsOn:
+        Fn::If:
+          - TwoAzCondition
+          - - Ref: InstanceB
+          - Fn::If: 
+            - ThreeAzCondition
+            - - Ref: InstanceB
+              - Ref: InstanceC
+            - []
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - DmesgLogGroup
+      - DockerLogGroup
+      - EcsAgentLogGroup
+      - EcsInitLogGroup
+      - MessagesLogGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            10_mount_create:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mkdir -p ${NfsMount}
+                - Ref: AWS::NoValue
+            11_mount_fstab:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: echo -e "${NfsHostUrl} ${NfsMount} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+                - Ref: AWS::NoValue
+            12_mount_efs:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mount -a
+                - Ref: AWS::NoValue
+            13_mount_permissions:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: chown ${NfsUserId}:${NfsUserId} ${NfsMount}
+                - Ref: AWS::NoValue
+            20_first_run:
+              command: sh firstrun.sh
+              env:
+                STACK_NAME:
+                  Ref: AWS::StackName
+                AUTOSCALING_GROUP:
+                  Ref: Name
+                AWS_DEFAULT_REGION:
+                  Ref: AWS::Region
+                ECS_CLUSTER:
+                  Ref: EcsCluster
+                DOCKER_NETWORK_MODE:
+                  Ref: DockerNetworkMode
+                TIME_ZONE:
+                  Ref: TimeZone
+                PROXY_URL:
+                  Ref: ProxyUrl
+              cwd: /home/ec2-user/
+    Properties:
+      ImageId: 
+        Ref: ImageIdInstanceA
+      InstanceType:
+        Ref: InstanceType
+      BlockDeviceMappings:
+        Fn::If:
+          - NoBlockDeviceCondition
+          - Ref: AWS::NoValue
+          - - DeviceName: /dev/xvdf
+              Ebs:
+                VolumeSize:
+                  Ref: BlockDeviceStorage
+                VolumeType: gp2
+                DeleteOnTermination: True
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      KeyName:
+        Ref: KeyName
+      UserData:
+        Fn::Base64:
+          Fn::If:
+            - ProxyEnabledCondition
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceA --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceA --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceA --region ${AWS::Region}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceA --region ${AWS::Region}
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress:
+            Fn::If:
+              - PublicInstanceCondition
+              - "true"
+              - "false"
+          SubnetId:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetA
+          PrivateIpAddress:
+            Fn::If:
+              - FixedIpAddressInstanceACondition
+              - Ref: FixedIpAddressInstanceA
+              - Ref: AWS::NoValue
+          GroupSet:
+            Fn::If:
+              - DefaultAndCustomSecurityGroupCondition
+              - - Ref: CustomSecurityGroup
+                - Ref: DefaultSecurityGroup
+              - Fn::If:
+                - DefaultSecurityGroupOnlyCondition
+                - - Ref: DefaultSecurityGroup
+                - Fn::If:
+                  - CustomSecurityGroupOnlyCondition
+                  - - Ref: CustomSecurityGroup
+                    - Ref: InstanceSecurityGroup
+                  - - Ref: InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-instance-a
+  InstanceB:
+    Type: AWS::EC2::Instance
+    Condition: CreateInstanceB
+    DependsOn:
+      - DmesgLogGroup
+      - DockerLogGroup
+      - EcsAgentLogGroup
+      - EcsInitLogGroup
+      - MessagesLogGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            10_mount_create:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mkdir -p ${NfsMount}
+                - Ref: AWS::NoValue
+            11_mount_fstab:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: echo -e "${NfsHostUrl} ${NfsMount} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+                - Ref: AWS::NoValue
+            12_mount_efs:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mount -a
+                - Ref: AWS::NoValue
+            13_mount_permissions:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: chown ${NfsUserId}:${NfsUserId} ${NfsMount}
+                - Ref: AWS::NoValue
+            20_first_run:
+              command: sh firstrun.sh
+              env:
+                STACK_NAME:
+                  Ref: AWS::StackName
+                AUTOSCALING_GROUP:
+                  Ref: Name
+                AWS_DEFAULT_REGION:
+                  Ref: AWS::Region
+                ECS_CLUSTER:
+                  Ref: EcsCluster
+                DOCKER_NETWORK_MODE:
+                  Ref: DockerNetworkMode
+                TIME_ZONE:
+                  Ref: TimeZone
+                PROXY_URL:
+                  Ref: ProxyUrl
+              cwd: /home/ec2-user/
+    Properties:
+      ImageId: 
+        Ref: ImageIdInstanceB
+      InstanceType:
+        Ref: InstanceType
+      BlockDeviceMappings:
+        Fn::If:
+          - NoBlockDeviceCondition
+          - Ref: AWS::NoValue
+          - - DeviceName: /dev/xvdf
+              Ebs:
+                VolumeSize:
+                  Ref: BlockDeviceStorage
+                VolumeType: gp2
+                DeleteOnTermination: True
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      KeyName:
+        Ref: KeyName
+      UserData:
+        Fn::Base64:
+          Fn::If:
+            - ProxyEnabledCondition
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceB --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceB --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceB --region ${AWS::Region}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceB --region ${AWS::Region}
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress:
+            Fn::If:
+              - PublicInstanceCondition
+              - "true"
+              - "false"
+          SubnetId:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetB
+          PrivateIpAddress:
+            Fn::If:
+              - FixedIpAddressInstanceACondition
+              - Ref: FixedIpAddressInstanceB
+              - Ref: AWS::NoValue
+          GroupSet:
+            Fn::If:
+              - DefaultAndCustomSecurityGroupCondition
+              - - Ref: CustomSecurityGroup
+                - Ref: DefaultSecurityGroup
+              - Fn::If:
+                - DefaultSecurityGroupOnlyCondition
+                - - Ref: DefaultSecurityGroup
+                - Fn::If:
+                  - CustomSecurityGroupOnlyCondition
+                  - - Ref: CustomSecurityGroup
+                    - Ref: InstanceSecurityGroup
+                  - - Ref: InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-instance-b
+  InstanceC:
+    Type: AWS::EC2::Instance
+    Condition: ThreeAzCondition
+    DependsOn:
+      - DmesgLogGroup
+      - DockerLogGroup
+      - EcsAgentLogGroup
+      - EcsInitLogGroup
+      - MessagesLogGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            10_mount_create:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mkdir -p ${NfsMount}
+                - Ref: AWS::NoValue
+            11_mount_fstab:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: echo -e "${NfsHostUrl} ${NfsMount} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+                - Ref: AWS::NoValue
+            12_mount_efs:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: mount -a
+                - Ref: AWS::NoValue
+            13_mount_permissions:
+              Fn::If:
+                - NfsEnabled
+                - command:
+                    Fn::Sub: chown ${NfsUserId}:${NfsUserId} ${NfsMount}
+                - Ref: AWS::NoValue
+            20_first_run:
+              command: sh firstrun.sh
+              env:
+                STACK_NAME:
+                  Ref: AWS::StackName
+                AUTOSCALING_GROUP:
+                  Ref: Name
+                AWS_DEFAULT_REGION:
+                  Ref: AWS::Region
+                ECS_CLUSTER:
+                  Ref: EcsCluster
+                DOCKER_NETWORK_MODE:
+                  Ref: DockerNetworkMode
+                TIME_ZONE:
+                  Ref: TimeZone
+                PROXY_URL:
+                  Ref: ProxyUrl
+              cwd: /home/ec2-user/
+    Properties:
+      ImageId: 
+        Ref: ImageIdInstanceC
+      InstanceType:
+        Ref: InstanceType
+      BlockDeviceMappings:
+        Fn::If:
+          - NoBlockDeviceCondition
+          - Ref: AWS::NoValue
+          - - DeviceName: /dev/xvdf
+              Ebs:
+                VolumeSize:
+                  Ref: BlockDeviceStorage
+                VolumeType: gp2
+                DeleteOnTermination: True
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      KeyName:
+        Ref: KeyName
+      UserData:
+        Fn::Base64:
+          Fn::If:
+            - ProxyEnabledCondition
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceC --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceC --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceC --region ${AWS::Region}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}InstanceC --region ${AWS::Region}
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress:
+            Fn::If:
+              - PublicInstanceCondition
+              - "true"
+              - "false"
+          SubnetId:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetC
+          PrivateIpAddress:
+            Fn::If:
+              - FixedIpAddressInstanceACondition
+              - Ref: FixedIpAddressInstanceC
+              - Ref: AWS::NoValue
+          GroupSet:
+            Fn::If:
+              - DefaultAndCustomSecurityGroupCondition
+              - - Ref: CustomSecurityGroup
+                - Ref: DefaultSecurityGroup
+              - Fn::If:
+                - DefaultSecurityGroupOnlyCondition
+                - - Ref: DefaultSecurityGroup
+                - Fn::If:
+                  - CustomSecurityGroupOnlyCondition
+                  - - Ref: CustomSecurityGroup
+                    - Ref: InstanceSecurityGroup
+                  - - Ref: InstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-instance-c
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: NoDefaultSecurityGroupCondition
+    Properties:
+      GroupDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+      SecurityGroupEgress:
+        Fn::If:
+          - ProxyEnabledCondition
+          - - IpProtocol: udp
+              FromPort: 53
+              ToPort: 53
+              CidrIp:
+                Fn::Join:
+                  - ""
+                  - - Fn::ImportValue:
+                        Fn::Sub: ${VpcName}VpcDnsServer
+                    - /32
+            - IpProtocol: udp
+              FromPort: 123
+              ToPort: 123
+              CidrIp:
+                Fn::ImportValue:
+                  Fn::Sub: ${VpcName}NtpSecurityGroup
+            - IpProtocol: tcp
+              FromPort: 3128
+              ToPort: 3128
+              DestinationSecurityGroupId:
+                Fn::ImportValue:
+                  Fn::Sub: ${VpcName}ProxySecurityGroup
+          - - IpProtocol: udp
+              FromPort: 53
+              ToPort: 53
+              CidrIp:
+                Fn::Join:
+                  - ""
+                  - - Fn::ImportValue:
+                        Fn::Sub: ${VpcName}VpcDnsServer
+                    - /32
+            - IpProtocol: udp
+              FromPort: 123
+              ToPort: 123
+              CidrIp:
+                Fn::ImportValue:
+                  Fn::Sub: ${VpcName}NtpSecurityGroup
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
+            - IpProtocol: tcp
+              FromPort: 443
+              ToPort: 443
+              CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-sg
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+            - sts:AssumeRole
+      Policies:
+        - PolicyName: ECSContainerInstancePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement: 
+            - Effect: Allow
+              Action: 
+              - ecs:RegisterContainerInstance
+              - ecs:DeregisterContainerInstance
+              Resource: 
+                Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+            - Effect: Allow
+              Action:
+              - ecs:DiscoverPollEndpoint
+              - ecs:Submit*
+              - ecs:Poll
+              - ecs:StartTelemetrySession
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+              - ecr:GetAuthorizationToken
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - kms:Decrypt
+              Resource:
+                Fn::ImportValue: CfnMasterKeyArn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+              Resource:
+              - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: InstanceRole
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+  CPUCreditBalanceInstanceA:
+    Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceType
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ${Name} Instance A low CPU credit balance
+      MetricName: CPUCreditBalance
+      Namespace: AWS/EC2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceA
+  CPUCreditBalanceInstanceB:
+    Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceTypeB
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ${Name} Instance B low CPU credit balance
+      MetricName: CPUCreditBalance
+      Namespace: AWS/EC2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceB
+  CPUCreditBalanceInstanceC:
+    Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceTypeC
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ${Name} Instance C low CPU credit balance
+      MetricName: CPUCreditBalance
+      Namespace: AWS/EC2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceC
+  CPUUtilizationInstanceA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance A CPU utilization check
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceA
+  CPUUtilizationInstanceB:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateInstanceB
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance B CPU utilization check
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceB
+  CPUUtilizationInstanceC:
+    Type: AWS::CloudWatch::Alarm
+    Condition: ThreeAzCondition
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance C CPU utilization check
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceC
+  StatusCheckInstanceA:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance A status check failures
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceA
+  StatusCheckInstanceB:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateInstanceB
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance B status check failures
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceB
+  StatusCheckInstanceC:
+    Type: AWS::CloudWatch::Alarm
+    Condition: ThreeAzCondition
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Instance C status check failures
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Ref: InstanceC
+  ClusterCPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} ECS Cluster CPU Utilization
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            Ref: EcsCluster
+  ClusterMemoryUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} ECS Cluster Memory Utilization
+      MetricName: MemoryUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            Ref: EcsCluster
+  EcsTaskRunnerRole:
+    Type: AWS::IAM::Role
+    Condition: CreateEcsTaskRunnerCondition
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: ECSTasks
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: ECSTasks
+            Effect: Allow
+            Action:
+              - ecs:StartTask
+              - ecs:RunTask
+              - ecs:StopTask
+              - ecs:DescribeTasks
+              - ecs:ListTasks
+            Condition:
+              ArnEquals:
+                ecs:cluster:
+                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+            Resource: "*"
+          - Sid: ECSTaskDefinitions
+            Effect: Allow
+            Action:
+              - ecs:DescribeTaskDefinition
+            Resource: "*"
+          - Sid: ECSContainerInstances
+            Effect: Allow
+            Action:
+              - ecs:ListContainerInstances
+            Resource:
+              - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+          - Sid: InvokeSelf
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-${Name}-ecsTasks
+          - Sid: StackStatus
+            Effect: Allow
+            Action:
+              - cloudformation:DescribeStacks
+            Resource:
+              Fn::Sub: arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/${AWS::StackId}
+          - Sid: CreateLambdaLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: 
+              Fn::Sub: ${EcsTaskRunnerLogGroup.Arn}
+  EcsTaskRunner:
+    Type: AWS::Lambda::Function
+    Condition: CreateEcsTaskRunnerCondition
+    DependsOn:
+      - EcsTaskRunnerLogGroup
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ${Name} ECS Task Runner
+      Handler: ecs_tasks.handler
+      MemorySize: 128
+      Runtime: python2.7
+      Timeout: 300
+      Role:
+        Fn::Sub: ${EcsTaskRunnerRole.Arn}
+      FunctionName: 
+        Fn::Sub: ${AWS::StackName}-${Name}-ecsTasks
+      Code:
+        S3Bucket:
+          Fn::ImportValue: CfnLambdaBucket
+        S3Key: ecsTasks.zip
+        S3ObjectVersion:
+          Fn::If:
+            - EcsTaskRunnerLatest
+            - Ref: AWS::NoValue
+            - Ref: EcsTaskRunnerVersion
+  EcsTaskRunnerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: CreateEcsTaskRunnerCondition
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-ecsTasks
+      RetentionInDays:
+        Ref: LogRetention
+
+Outputs:
+  SecurityGroup:
+    Description: EC2 Instance Security Group
+    Value:
+      Fn::If:
+        - DefaultSecurityGroupCondition
+        - Ref: DefaultSecurityGroup
+        - Ref: InstanceSecurityGroup
+  InstanceRole:
+    Description: EC2 Instance Role Name
+    Value:
+      Ref: InstanceRole
+  EcsCluster:
+    Description: EC2 Instances ECS Cluster
+    Value:
+      Ref: EcsCluster
+  EcsTaskRunner:
+    Condition: CreateEcsTaskRunnerCondition
+    Description: ECS Task Runner Function
+    Value:
+      Ref: EcsTaskRunner
