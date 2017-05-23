@@ -99,9 +99,6 @@ def search_and_replace(data, search, replace, as_value=False):
         node[key] = replace
     if key in ['Fn::GetAtt'] and node == search:
       parent[parent_key] = replace
-    if key in ['Fn::If'] and item[0] == search and re.match('\$\[(\d)\]',replace):
-      index = int(re.match('\$\[(\d)\]',replace).group(1))
-      parent[parent_key] = node[key][index]
     if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
     if key == 'Condition' and search == item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
@@ -147,23 +144,27 @@ def find_in_sub(search, values):
 
 def fix_conditions(data, transform, input_parameter_key, input_parameter_value, resource_property):
   resource_keys = data['Resources'].keys()
-  if not isinstance(resource_property, dict):
-    return
-  if (resource_property.get('Ref') in resource_keys or
-      resource_property.get('Fn::GetAtt') or 
-      resource_property.get('Fn::ImportValue') or
-      find_in_sub(resource_property.get('Fn::Sub'),resource_keys)):
-    # Find any conditions that reference the trasnform input parameter and use Fn::Not/Fn::Equals pattern
-    conditions = [
-      c for c,v in transform.get('Conditions',{}).iteritems() 
-      if v.get('Fn::Not') and v['Fn::Not'][0].get('Fn::Equals',[{}])[0].get('Ref') == input_parameter_key
-    ]
-    for c in conditions:
-      logging.debug("--> Removing and evaluating condition %s as True because it references an illegal input value %s", c, resource_property)
-      # Remove the condition
-      del transform['Conditions'][c]
-      # Transform conditionals to 'True' result
-      search_and_replace(transform, c, '$[1]')
+  if (isinstance(resource_property, dict) and
+      (resource_property.get('Ref') in resource_keys or
+       resource_property.get('Fn::GetAtt') or 
+       resource_property.get('Fn::ImportValue') or
+       find_in_sub(resource_property.get('Fn::Sub'),resource_keys))):
+    # Find any conditions that reference the transform input parameter and use Fn::Not/Fn::Equals pattern
+    for c,v in transform.get('Conditions',{}).iteritems():
+      # Replace the referenced resource/import of Fn::Equals conditions with string value of the input parameter
+      # This will always force evaluation of Fn::Equals to False
+      if {'Ref':input_parameter_key} in v.get('Fn::Equals',[]):
+        logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value %s", c, resource_property)
+        transform['Conditions'][c] = {
+          'Fn::Equals': map(lambda x: x if x != {'Ref':input_parameter_key} else input_parameter_key, v['Fn::Equals'])
+        }
+      elif v.get('Fn::Not') and {'Ref':input_parameter_key} in v['Fn::Not'][0].get('Fn::Equals',[]):
+        logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value %s", c, resource_property)
+        transform['Conditions'][c] = {
+          'Fn::Not': [{
+            'Fn::Equals': map(lambda x: x if x != {'Ref':input_parameter_key} else input_parameter_key, v['Fn::Not'][0]['Fn::Equals'])
+          }]
+        }
 
 def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   # Set logging level
