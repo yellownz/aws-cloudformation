@@ -225,9 +225,6 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
         logging.debug("--> Renaming %s to %s", key, name+key)
         search_and_replace(output, key, name+key)
 
-    # Check if renamed resources will clash with main stack
-
-
     # Fix conditions that will result in illegally referencing a resource
     logging.debug("%s: Evaluating conditions that reference a resource or stack export", name)
     for output_param_key, output_param_value in output_parameters.iteritems():
