@@ -349,7 +349,7 @@ Resources:
                   --http-proxy ${ProxyUrl} \
                   --https-proxy ${ProxyUrl}
                 /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
-                  --resource ${Name}AutoscalingGroup --region ${AWS::Region} --region ${AWS::Region} \
+                  --resource ${Name}AutoscalingGroup --region ${AWS::Region} \
                   --http-proxy ${ProxyUrl} \
                   --https-proxy ${ProxyUrl}
             - Fn::Sub: |
