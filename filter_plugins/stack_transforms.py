@@ -219,8 +219,8 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     for section in ['Resources','Mappings','Conditions','Outputs']:
       for key in output.get(section, {}).keys():
         # Check if renamed resources will clash with main stack
-        if name+key in data.get(section, {}).keys():
-          raise AnsibleError("ERROR: The key %s in transform %s clashes with an existing resource %s" % (key, name, name+key))
+        if section != 'Outputs' and name+key in data.get(section, {}).keys():
+          raise AnsibleError("ERROR: The key %s in transform %s clashes with object %s in main stack '%s'" % (key, name, name+key, section))
         output[section][name+key] = output[section].pop(key)
         logging.debug("--> Renaming %s to %s", key, name+key)
         search_and_replace(output, key, name+key)
