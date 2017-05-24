@@ -97,6 +97,15 @@ Parameters:
       - High
       - Management
       - Public
+  CreateEcsTaskRunner:
+    Type: String
+    Description: Enable/disable creation of ECS Task Runner resources
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
   TimeZone:
     Type: String
     Description: Time Zone to set in EC2 instances
@@ -175,7 +184,14 @@ Conditions:
   #   Fn::Equals:
   #   - Ref: LifecycleHookVersion
   #   - latest
-
+  CreateEcsTaskRunnerCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "True"
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "true"
 Resources:
   DmesgLogGroup:
     Type: AWS::Logs::LogGroup
@@ -786,6 +802,7 @@ Resources:
   #     SourceArn: { "Ref": "LifecycleHookTopic" }
   EcsTaskRunnerRole:
     Type: AWS::IAM::Role
+    Condition: CreateEcsTaskRunnerCondition
     Properties:
       Path: /
       AssumeRolePolicyDocument:
@@ -846,6 +863,7 @@ Resources:
               Fn::Sub: ${EcsTaskRunnerLogGroup.Arn}
   EcsTaskRunner:
     Type: "AWS::Lambda::Function"
+    Condition: CreateEcsTaskRunnerCondition
     DependsOn:
       - EcsTaskRunnerLogGroup
     Properties:
@@ -870,6 +888,7 @@ Resources:
             - Ref: EcsTaskRunnerVersion
   EcsTaskRunnerLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateEcsTaskRunnerCondition
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
@@ -891,6 +910,7 @@ Outputs:
     Value:
       Ref: EcsCluster
   EcsTaskRunner:
+    Condition: CreateEcsTaskRunnerCondition
     Description: ECS Task Runner Function
     Value:
       Ref: EcsTaskRunner
