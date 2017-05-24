@@ -32,10 +32,6 @@ Parameters:
     Type: String
     Description: Custom security group to attach to EC2 instances, in addition to the default security group
     Default: NONE
-  DefaultSecurityGroup:
-    Type: String
-    Description: Overrides the default security group attached to EC2 instances
-    Default: NONE
   DockerNetworkMode:
     Type: String
     Description: Docker networking mode - bridge or host
@@ -116,6 +112,9 @@ Parameters:
     Type: Number
     Description: User Id that owns NFS mount.  Requires NfsHostUrl and NfsMount to be specified.
     Default: 0
+  NtpServer:
+    Type: String
+    Description: Defines custom NTP server the EC2 instances will be permitted to access.  This is only required for special use cases.
   ProxyUrl:
     Type: String
     Description: Defines proxy URL.  A blank string will disable proxy operation.
@@ -138,6 +137,11 @@ Parameters:
     Default: Default
 
 Conditions:
+  CustomNtpServerCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: NtpServer
+        - NONE
   FixedIpAddressInstanceACondition:
     Fn::Not:
       - Fn::Equals:
@@ -153,38 +157,11 @@ Conditions:
       - Fn::Equals:
         - Ref: FixedIpAddressInstanceC
         - DYNAMIC
-  NoDefaultSecurityGroupCondition:
-    Fn::Not:
-      - Condition: DefaultSecurityGroupCondition
-  DefaultSecurityGroupCondition:
-    Fn::Not:
-      - Fn::Equals:
-        - Ref: DefaultSecurityGroup
-        - NONE
   CustomSecurityGroupCondition:
     Fn::Not:
       - Fn::Equals:
         - Ref: CustomSecurityGroup
         - NONE
-  DefaultAndCustomSecurityGroupCondition:
-    Fn::And:
-      - Condition: DefaultSecurityGroupCondition
-      - Condition: CustomSecurityGroupCondition
-  DefaultSecurityGroupOnlyCondition:
-    Fn::And:
-      - Condition: DefaultSecurityGroupCondition
-      - Fn::Not:
-          - Condition: CustomSecurityGroupCondition
-  CustomSecurityGroupOnlyCondition:
-    Fn::And:
-      - Condition: CustomSecurityGroupCondition
-      - Fn::Not:
-          - Condition: DefaultSecurityGroupCondition
-  NoDefaultAndCustomSecurityGroupCondition:
-    Fn::Not:
-      - Fn::And:
-        - Condition: CustomSecurityGroupCondition
-        - Condition: DefaultSecurityGroupCondition
   NfsEnabled:
     Fn::Not:
       - Fn::Equals:
@@ -502,18 +479,11 @@ Resources:
               - Ref: FixedIpAddressInstanceA
               - Ref: AWS::NoValue
           GroupSet:
-            Fn::If:
-              - DefaultAndCustomSecurityGroupCondition
+            Fn::If: 
+              - CustomSecurityGroupCondition
               - - Ref: CustomSecurityGroup
-                - Ref: DefaultSecurityGroup
-              - Fn::If:
-                - DefaultSecurityGroupOnlyCondition
-                - - Ref: DefaultSecurityGroup
-                - Fn::If:
-                  - CustomSecurityGroupOnlyCondition
-                  - - Ref: CustomSecurityGroup
-                    - Ref: InstanceSecurityGroup
-                  - - Ref: InstanceSecurityGroup
+                - Ref: SecurityGroup
+              - - Ref: SecurityGroup
       Tags:
         - Key: Name
           Value: 
@@ -636,18 +606,11 @@ Resources:
               - Ref: FixedIpAddressInstanceB
               - Ref: AWS::NoValue
           GroupSet:
-            Fn::If:
-              - DefaultAndCustomSecurityGroupCondition
+            Fn::If: 
+              - CustomSecurityGroupCondition
               - - Ref: CustomSecurityGroup
-                - Ref: DefaultSecurityGroup
-              - Fn::If:
-                - DefaultSecurityGroupOnlyCondition
-                - - Ref: DefaultSecurityGroup
-                - Fn::If:
-                  - CustomSecurityGroupOnlyCondition
-                  - - Ref: CustomSecurityGroup
-                    - Ref: InstanceSecurityGroup
-                  - - Ref: InstanceSecurityGroup
+                - Ref: SecurityGroup
+              - - Ref: SecurityGroup
       Tags:
         - Key: Name
           Value: 
@@ -770,25 +733,17 @@ Resources:
               - Ref: FixedIpAddressInstanceC
               - Ref: AWS::NoValue
           GroupSet:
-            Fn::If:
-              - DefaultAndCustomSecurityGroupCondition
+            Fn::If: 
+              - CustomSecurityGroupCondition
               - - Ref: CustomSecurityGroup
-                - Ref: DefaultSecurityGroup
-              - Fn::If:
-                - DefaultSecurityGroupOnlyCondition
-                - - Ref: DefaultSecurityGroup
-                - Fn::If:
-                  - CustomSecurityGroupOnlyCondition
-                  - - Ref: CustomSecurityGroup
-                    - Ref: InstanceSecurityGroup
-                  - - Ref: InstanceSecurityGroup
+                - Ref: SecurityGroup
+              - - Ref: SecurityGroup
       Tags:
         - Key: Name
           Value: 
             Fn::Sub: ${AWS::StackName}-${Name}-instance-c
-  InstanceSecurityGroup:
+  SecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    Condition: NoDefaultSecurityGroupCondition
     Properties:
       GroupDescription: 
         Fn::Sub: ${AWS::StackName} ${Name} Security Group
@@ -836,8 +791,11 @@ Resources:
               FromPort: 123
               ToPort: 123
               CidrIp:
-                Fn::ImportValue:
-                  Fn::Sub: ${VpcName}NtpSecurityGroup
+                Fn::If:
+                  - CustomNtpServerCondition
+                  - Ref: NtpServer
+                  - Fn::ImportValue:
+                      Fn::Sub: ${VpcName}NtpSecurityGroup
             - IpProtocol: tcp
               FromPort: 3128
               ToPort: 3128
@@ -857,8 +815,11 @@ Resources:
               FromPort: 123
               ToPort: 123
               CidrIp:
-                Fn::ImportValue:
-                  Fn::Sub: ${VpcName}NtpSecurityGroup
+                Fn::If:
+                  - CustomNtpServerCondition
+                  - Ref: NtpServer
+                  - Fn::ImportValue:
+                      Fn::Sub: ${VpcName}NtpSecurityGroup
             - IpProtocol: tcp
               FromPort: 80
               ToPort: 80
@@ -1379,10 +1340,7 @@ Outputs:
   SecurityGroup:
     Description: EC2 Instance Security Group
     Value:
-      Fn::If:
-        - DefaultSecurityGroupCondition
-        - Ref: DefaultSecurityGroup
-        - Ref: InstanceSecurityGroup
+      Ref: SecurityGroup
   InstanceRole:
     Description: EC2 Instance Role Name
     Value:
