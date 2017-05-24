@@ -92,20 +92,20 @@ def search_and_replace(data, search, replace, as_value=False):
       if type(item) is str else acc + [item], joined_parts, [])
     parent[parent_key] = { 'Fn::Join': ['', ref_replaced ] }
   def parse(key, item, node, parent, parent_key):
-    if key == 'Ref' and item == search:
+    if node == search:
+      parent[parent_key] = replace
+    elif key == 'Ref' and item == search:
       if as_value:
         parent[parent_key] = replace
       else:
         node[key] = replace
-    if key in ['Fn::GetAtt'] and node == search:
-      parent[parent_key] = replace
-    if key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
+    elif key in ['Fn::FindInMap','Fn::GetAtt','Fn::If'] and item[0] == search:
       node[key][0] = replace
-    if key == 'Condition' and search == item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
+    elif key == 'Condition' and search == item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
       node[key] = replace
-    if key == 'DependsOn' and search in item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
+    elif key == 'DependsOn' and search in item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
       node[key][item.index(search)] = replace
-    if key == 'Fn::Sub' and '${%s' % search in item:
+    elif key == 'Fn::Sub' and '${%s' % search in item:
       replace_value = str(replace)
       if as_value:
         if type(replace) is dict and 'Ref' in replace.keys():
@@ -149,22 +149,10 @@ def fix_conditions(data, transform, input_parameter_key, input_parameter_value, 
        resource_property.get('Fn::GetAtt') or 
        resource_property.get('Fn::ImportValue') or
        find_in_sub(resource_property.get('Fn::Sub'),resource_keys))):
-    # Find any conditions that reference the transform input parameter and use Fn::Not/Fn::Equals pattern
+    # Find and replace any conditions that reference an illegal input parameter
     for c,v in transform.get('Conditions',{}).iteritems():
-      # Replace the referenced resource/import of Fn::Equals conditions with string value of the input parameter
-      # This will always force evaluation of Fn::Equals to False
-      if {'Ref':input_parameter_key} in v.get('Fn::Equals',[]):
-        logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value %s", c, resource_property)
-        transform['Conditions'][c] = {
-          'Fn::Equals': map(lambda x: x if x != {'Ref':input_parameter_key} else input_parameter_key, v['Fn::Equals'])
-        }
-      elif v.get('Fn::Not') and {'Ref':input_parameter_key} in v['Fn::Not'][0].get('Fn::Equals',[]):
-        logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value %s", c, resource_property)
-        transform['Conditions'][c] = {
-          'Fn::Not': [{
-            'Fn::Equals': map(lambda x: x if x != {'Ref':input_parameter_key} else input_parameter_key, v['Fn::Not'][0]['Fn::Equals'])
-          }]
-        }
+      logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value", c)
+      search_and_replace(transform['Conditions'],{'Ref':input_parameter_key}, input_parameter_key)
 
 def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   # Set logging level
