@@ -1,0 +1,147 @@
+AWSTemplateFormatVerion: "2010-09-09"
+
+Description: ElastiCache Stack
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - ElastiCache
+
+Parameters:
+  FailoverEnabled:
+    Type: String
+    Description: Enables/disables Redis cache automatic failover
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "False"
+  NumClusters:
+    Type: Number
+    Description: Number of cache clusters
+    Default: 1
+  NodeType:
+    Type: String
+    Description: Type of cache instance
+    Default: cache.t2.micro
+  Port:
+    Type: Number
+    Description: Port number on which replication group accepts connection
+    Default: 6379
+  Engine:
+    Type: String
+    Description: Name of Cache Engine
+    AllowedValues:
+      - "Redis"
+    Default: "Redis"
+  Version:
+    Type: String
+    Description: Version number of cache engine
+    Default: "3.2.4"
+  MaintenanceWindow:
+    Type: String
+    Description: Weekly time range during which maintenance can occur
+  Subnets:
+    Type: String
+    Description: Subnet the elasticache instance will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+    Default: High
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC
+    Default: Default
+  IngressSecurityGroup:
+    Type: String
+    Description: Ingress Security Group that will be granted access to elasticache
+
+Conditions:
+  CacheFailoverEnabled:
+    Fn::Equals:
+      - Ref: FailoverEnabled
+      - "True"
+
+Resources:
+  ElastiCache:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupDescription:
+        Fn::Sub: ${AWS::StackName}-redis-cache
+      AutomaticFailoverEnabled:
+        Ref: FailoverEnabled
+      NumCacheClusters:
+        Ref: NumClusters
+      CacheNodeType:
+        Ref: NodeType
+      Port:
+        Ref: Port
+      Engine:
+        Ref: Engine
+      EngineVersion:
+        Ref: Version
+      CacheSubnetGroupName:
+        Ref: SubnetGroup
+      PreferredMaintenanceWindow:
+        Ref: MaintenanceWindow
+      SnapshotWindow:
+        Fn::If:
+          - CacheFailoverEnabled
+          - "08:00-10:00"
+          - Ref: AWS::NoValue
+      SecurityGroupIds:
+        - Ref: SecurityGroup
+  SubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName}-redis-cache-subnet-group
+      SubnetIds:
+        - Fn::ImportValue:
+            Fn::Sub: ${VpcName}${Subnets}SubnetA
+        - Fn::ImportValue:
+            Fn::Sub: ${VpcName}${Subnets}SubnetB
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:
+        Fn::Sub: ${AWS::StackName}-redis-cache-sg
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupEgress:
+        - IpProtocol: icmp
+          FromPort : -1
+          ToPort : -1
+          CidrIp: "192.0.2.0/24"
+  ToApplicationCacheEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: Port
+      ToPort:
+        Ref: Port
+      GroupId:
+        Ref: IngressSecurityGroup
+      DestinationSecurityGroupId:
+        Ref: SecurityGroup
+  ToApplicationCacheIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort:
+        Ref: Port
+      ToPort:
+        Ref: Port
+      GroupId:
+        Ref: SecurityGroup
+      SourceSecurityGroupId:
+        Ref: IngressSecurityGroup
+
+Outputs:
+  EndPoint:
+    Description: Elasticache instance primary endpoint
+    Value:
+      Fn::Sub: ${ElastiCache.PrimaryEndPoint.Address}
