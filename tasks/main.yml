@@ -1,27 +1,27 @@
 ---
 - block:
-    - include: disable_policy.yml
-  when: cf_disable_stack_policy | default(False) | bool
+    - include: init.yml
 
 - block:
-    - include: build.yml
+    - include: disable_policy.yml
+  when: cf_disable_stack_policy
+
+- block:
     - include: generator.yml
     - include: s3.yml
-      when: cf_upload_s3 | default(False) | bool
+      when: cf_upload_s3
     - include: cloudformation.yml
-    - include: outputs.yml
-      when: cf_upload_s3 | default(False) | bool
   rescue:
     - name: capture failure
       set_fact:
         cf_failure: "true"
   always:
     - include: enable_policy.yml
-      when: cf_disable_stack_policy is defined
+      when: cf_disable_stack_policy
     - fail: msg="The playbook encountered an error"
       when: cf_failure | default(False) | bool
-  when: not cf_delete_stack | default(False) | bool
+  when: not cf_delete_stack
 
 - block:
     - include: delete.yml
-  when: cf_delete_stack | default(False) | bool
+  when: cf_delete_stack

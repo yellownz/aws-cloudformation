@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Elastic File System (EFS) Stack
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - FileSystem
+
+Parameters:
+  Name:
+    Type: String
+    Description: Name of CloudWatch Event
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 2
+      - 3
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  IngressSecurityGroup:
+    Type: String
+    Description: Security Group permitted access to EFS
+  PerformanceMode:
+    Type: String
+    Description: EFS Performance Mode
+    Default: generalPurpose
+    AllowedValues:
+      - generalPurpose
+      - maxIO
+  Subnets:
+    Type: String
+    Description: Subnet the EFS service will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC name
+    Default: Default
+
+Conditions:
+  GeneralPerformanceMode:
+    Fn::Equals:
+      - Ref: PerformanceMode
+      - generalPurpose
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+Resources:
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${AWS::StackName}-${Name}-efs
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: 
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetA
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetB
+  MountTargetC:
+    Type: AWS::EFS::MountTarget
+    Condition: ThreeAzCondition
+    Properties:
+      FileSystemId:
+        Ref: FileSystem
+      SecurityGroups:
+        - Ref: SecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}${Subnets}SubnetC
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupEgress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 192.0.2.0/32
+  ToFileSystemEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      GroupId:
+        Ref: IngressSecurityGroup
+      DestinationSecurityGroupId:
+        Ref: SecurityGroup
+  ToFileSystemIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      GroupId:
+        Ref: SecurityGroup
+      SourceSecurityGroupId:
+        Ref: IngressSecurityGroup
+  PercentIOLimit:
+    Type: AWS::CloudWatch::Alarm
+    Condition: GeneralPerformanceMode
+    DependsOn:
+      - FileSystem
+    Properties:
+      AlarmDescription: I/O Percentage Limit of File System
+      MetricName: PercentIOLimit
+      Namespace: AWS/EFS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: FileSystemId
+          Value:
+            Ref: FileSystem
+Outputs:
+  FileSystem:
+    Description: File System 
+    Value:
+      Ref: FileSystem

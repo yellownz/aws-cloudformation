@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: CloudWatch Event Lambda Function Template
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - Event
+
+Parameters:
+  Name:
+    Type: String
+    Description: Name of CloudWatch Event
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  Input:
+    Type: String
+    Description: Input data to pass to the function
+    Default: '{}'
+  LambdaFunction:
+    Type: String
+    Description: Lambda Function ARN to invoke
+  ScheduleExpression:
+    Type: String
+    Description: Event cron or rate schedule expression
+
+Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+
+Resources:
+  Event:
+    Type: AWS::Events::Rule
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ${Name} CloudWatch Event
+      ScheduleExpression: 
+        Ref: ScheduleExpression
+      Targets:
+        - Arn:
+            Ref: LambdaFunction
+          Id:
+            Fn::Sub: ${AWS::StackName}-${Name}-event
+          Input:
+            Ref: Input
+  EventPermission:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      Action: lambda:InvokeFunction
+      FunctionName: 
+        Ref: LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: 
+        Fn::Sub: ${Event.Arn}
+  FailedInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Failed invocations check
+      MetricName: FailedInvocations
+      Namespace: AWS/Events
+      Statistic: SampleCount
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: RuleName
+          Value:
+            Ref: Event
+  ThrottledRulesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Failed invocations check
+      MetricName: ThrottledRules
+      Namespace: AWS/Events
+      Statistic: SampleCount
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: RuleName
+          Value:
+            Ref: Event

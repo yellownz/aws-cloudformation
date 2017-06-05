@@ -1,0 +1,916 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Autoscaling Group Stack
+
+Metadata:
+  Stack::Transform:
+    DefaultDependencyMappings:
+      - AutoscalingGroup
+
+Parameters:
+  Name:
+    Type: String
+    Description: Logical name of autoscaling group name
+    Default: ""
+  AzCount:
+    Type: Number
+    Description: Number of AZs to deploy
+    Default: 2
+    AllowedValues:
+      - 2
+      - 3
+  BlockDeviceStorage:
+    Type: Number
+    Description: Size of additional EBS volume to attach to instances
+    Default: 0
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  CustomSecurityGroup:
+    Type: String
+    Description: Custom Security Group to attach to Autoscaling Group
+    Default: NONE
+  DesiredCount:
+    Type: Number
+    Description: Autoscaling group desired instances count
+    Default: 1
+  DockerNetworkMode:
+    Type: String
+    Description: Docker networking mode - bridge or host
+    Default: bridge
+  EcsTaskRunnerVersion:
+    Type: String
+    Description: ECS Task Runner Lambda function S3 object version
+    Default: latest
+  ImageId:
+    Type: String
+    Description: Autoscaling group instances AMI
+  InstanceType:
+    Type: String
+    Description: Autoscaling group instance type
+    Default: t2.micro
+  KeyName:
+    Type: String
+    Description: EC2 Key pair name
+  # LifecycleHookVersion:
+  #   Type: String
+  #   Description: Lifecycle Hook Lambda function S3 object version
+  #   Default: latest
+  # LogSubscriptionArn:
+  #   Type: String
+  #   Description: ARN of Log Subscription
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  MinSize:
+    Type: Number
+    Description: Minimum autoscaling group size 
+    Default: 0
+  MaxSize:
+    Type: Number
+    Description: Maximum autoscaling group size 
+    Default: 4
+  NfsHostUrl:
+    Type: String
+    Description: NFS host URL including mount path.  Requires NfsMount to be specified.
+    Default: NONE
+  NfsMount:
+    Type: String
+    Description: Path for NFS mount.  Requires NfsHostUrl to be specified.
+    Default: NONE
+  NfsUserId:
+    Type: Number
+    Description: User Id that owns NFS mount.  Requires NfsHostUrl and NfsMount to be specified.
+    Default: 0
+  ProxyUrl:
+    Type: String
+    Description: Defines proxy URL.  A blank string will disable proxy operation.
+    Default: ""
+  Subnets:
+    Type: String
+    Description: Subnet the autoscaling group instances will be deployed to
+    AllowedValues:
+      - Medium
+      - High
+      - Management
+      - Public
+  CreateEcsTaskRunner:
+    Type: String
+    Description: Enable/disable creation of ECS Task Runner resources
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
+  TimeZone:
+    Type: String
+    Description: Time Zone to set in EC2 instances
+    Default: America/Los_Angeles
+  VpcName:
+    Type: String
+    Description: CloudFormation export prefix that defines the target VPC name
+    Default: Default
+
+Conditions:
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
+  NfsEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: NfsMount
+        - NONE
+  T2InstanceType:
+    Fn::Or:
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.nano
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.micro
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.small
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.medium
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.large
+      - Fn::Equals:
+          - Ref: InstanceType
+          - t2.xlarge
+  ThreeAzCondition:
+    Fn::Equals:
+      - Ref: AzCount
+      - 3
+  ProxyEnabledCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: ProxyUrl
+        - ""
+  SingleInstanceCondition:
+    Fn::Equals:
+      - Ref: DesiredCount
+      - 1
+  PublicInstanceCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: Subnets
+        - Frontend
+      - Fn::Equals:
+        - Ref: Subnets
+        - Public
+  NoBlockDeviceCondition:
+    Fn::Equals:
+      - Ref: BlockDeviceStorage
+      - 0
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  EcsTaskRunnerLatest:
+    Fn::Equals:
+    - Ref: EcsTaskRunnerVersion
+    - latest
+  # LifecycleHookLatest:
+  #   Fn::Equals:
+  #   - Ref: LifecycleHookVersion
+  #   - latest
+  CreateEcsTaskRunnerCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "True"
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "true"
+Resources:
+  DmesgLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/dmesg
+      RetentionInDays:
+        Ref: LogRetention
+  # DmesgLogGroupSubscription:
+  #   Type: "AWS::Logs::SubscriptionFilter"
+  #   Properties:
+  #     DestinationArn: { "Ref": "LogSubscriptionArn" }
+  #     FilterPattern: ""
+  #     LogGroupName: { "Ref": "DmesgLogGroup" }
+  DockerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/docker
+      RetentionInDays:
+        Ref: LogRetention
+  # DockerLogGroupSubscription:
+  #   Type: "AWS::Logs::SubscriptionFilter"
+  #   Properties:
+  #     DestinationArn: { "Ref": "LogSubscriptionArn" }
+  #     FilterPattern: ""
+  #     LogGroupName: { "Ref": "DockerLogGroup" }
+  MessagesLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/messages
+      RetentionInDays:
+        Ref: LogRetention
+  # MessagesLogGroupSubscription:
+  #   Type: "AWS::Logs::SubscriptionFilter"
+  #   Properties:
+  #     DestinationArn: { "Ref": "LogSubscriptionArn" }
+  #     FilterPattern: ""
+  #     LogGroupName: { "Ref": "MessagesLogGroup" }
+  EcsAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-agent
+      RetentionInDays:
+        Ref: LogRetention
+  # EcsAgentLogGroupSubscription:
+  #   Type: "AWS::Logs::SubscriptionFilter"
+  #   Properties:
+  #     DestinationArn: { "Ref": "LogSubscriptionArn" }
+  #     FilterPattern: ""
+  #     LogGroupName: { "Ref": "EcsAgentLogGroup" }
+  EcsInitLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/ec2/${Name}/var/log/ecs/ecs-init
+      RetentionInDays:
+        Ref: LogRetention
+  # EcsInitLogGroupSubscription:
+  #   Type: "AWS::Logs::SubscriptionFilter"
+  #   Properties:
+  #     DestinationArn: { "Ref": "LogSubscriptionArn" }
+  #     FilterPattern: ""
+  #     LogGroupName: { "Ref": "EcsInitLogGroup" }
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      Fn::If:
+        - NfsEnabled
+        - AWS::CloudFormation::Init:
+            config:
+              commands:
+                10_mount_create:
+                  command:
+                    Fn::Sub: mkdir -p ${NfsMount}
+                11_mount_fstab:
+                  command:
+                    Fn::Sub: echo -e "${NfsHostUrl} ${NfsMount} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+                12_mount_efs:
+                  command:
+                    Fn::Sub: mount -a
+                13_mount_permissions:
+                  command:
+                    Fn::Sub: chown ${NfsUserId}:${NfsUserId} ${NfsMount}
+                20_first_run:
+                  command: sh firstrun.sh
+                  env:
+                    STACK_NAME:
+                      Ref: AWS::StackName
+                    AUTOSCALING_GROUP:
+                      Ref: Name
+                    AWS_DEFAULT_REGION:
+                      Ref: AWS::Region
+                    ECS_CLUSTER:
+                      Ref: EcsCluster
+                    DOCKER_NETWORK_MODE:
+                      Ref: DockerNetworkMode
+                    TIME_ZONE:
+                      Ref: TimeZone
+                    PROXY_URL:
+                      Ref: ProxyUrl
+                  cwd: /home/ec2-user/
+        - AWS::CloudFormation::Init:
+            config:
+              commands:
+                10_first_run:
+                  command: sh firstrun.sh
+                  env:
+                    STACK_NAME:
+                      Ref: AWS::StackName
+                    AUTOSCALING_GROUP:
+                      Ref: Name
+                    AWS_DEFAULT_REGION:
+                      Ref: AWS::Region
+                    ECS_CLUSTER:
+                      Ref: EcsCluster
+                    DOCKER_NETWORK_MODE:
+                      Ref: DockerNetworkMode
+                    TIME_ZONE:
+                      Ref: TimeZone
+                    PROXY_URL:
+                      Ref: ProxyUrl
+                  cwd: /home/ec2-user/
+    Properties:
+      ImageId: 
+        Ref: ImageId
+      InstanceType:
+        Ref: InstanceType
+      AssociatePublicIpAddress:
+        Fn::If:
+          - PublicInstanceCondition
+          - "true"
+          - "false"
+      BlockDeviceMappings:
+        Fn::If:
+          - NoBlockDeviceCondition
+          - Ref: AWS::NoValue
+          - - DeviceName: /dev/xvdf
+              Ebs:
+                VolumeSize:
+                  Ref: BlockDeviceStorage
+                VolumeType: gp2
+                DeleteOnTermination: True
+      IamInstanceProfile:
+        Ref: InstanceProfile
+      KeyName:
+        Ref: KeyName
+      SecurityGroups:
+        Fn::If:
+          - CustomSecurityGroupCondition
+          - - Ref: CustomSecurityGroup
+            - Ref: SecurityGroup
+          - - Ref: SecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::If:
+            - ProxyEnabledCondition
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}LaunchConfiguration --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}AutoscalingGroup --region ${AWS::Region} \
+                  --http-proxy ${ProxyUrl} \
+                  --https-proxy ${ProxyUrl}
+            - Fn::Sub: |
+                #!/bin/bash
+                trap 'kill $(jobs -p)' EXIT
+                tail --retry -F /var/log/cfn-init.log >> /dev/console &
+                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${Name}LaunchConfiguration --region ${AWS::Region}
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${Name}AutoscalingGroup --region ${AWS::Region}
+  AutoscalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - DmesgLogGroup
+      - MessagesLogGroup
+      - DockerLogGroup
+      - EcsInitLogGroup
+      - EcsAgentLogGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService:
+          Ref: DesiredCount
+        MinSuccessfulInstancesPercent: 100
+        WaitOnResourceSignals: "true"
+        PauseTime: PT15M
+    CreationPolicy:
+      ResourceSignal:
+        Count:
+          Ref: DesiredCount
+        Timeout: PT15M
+    Properties:
+      VPCZoneIdentifier:
+        Fn::If:
+        - ThreeAzCondition
+        - - Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetA
+          - Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetB
+          - Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetC
+        - - Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetA
+          - Fn::ImportValue:
+              Fn::Sub: ${VpcName}${Subnets}SubnetB
+      LaunchConfigurationName:
+        Ref: LaunchConfiguration
+      MinSize:
+        Ref: MinSize
+      MaxSize:
+        Ref: MaxSize
+      DesiredCapacity:
+        Ref: DesiredCount
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-instance
+          PropagateAtLaunch: "true"
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} Security Group
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: ${VpcName}VpcId
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp:
+            Fn::ImportValue: 
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetACidr
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp:
+            Fn::ImportValue:
+              Fn::Sub: ${VpcName}ManagementSubnetBCidr
+      SecurityGroupEgress:
+        Fn::If:
+          - ProxyEnabledCondition
+          - - IpProtocol: udp
+              FromPort: 53
+              ToPort: 53
+              CidrIp:
+                Fn::Join:
+                  - ""
+                  - - Fn::ImportValue:
+                        Fn::Sub: ${VpcName}VpcDnsServer
+                    - /32
+            - IpProtocol: udp
+              FromPort: 123
+              ToPort: 123
+              CidrIp: 0.0.0.0/0
+            - IpProtocol: tcp
+              FromPort: 3128
+              ToPort: 3128
+              DestinationSecurityGroupId:
+                Fn::ImportValue:
+                  Fn::Sub: ${VpcName}ProxySecurityGroup
+          - - IpProtocol: udp
+              FromPort: 53
+              ToPort: 53
+              CidrIp:
+                Fn::Join:
+                  - ""
+                  - - Fn::ImportValue:
+                        Fn::Sub: ${VpcName}VpcDnsServer
+                    - /32
+            - IpProtocol: udp
+              FromPort: 123
+              ToPort: 123
+              CidrIp: 0.0.0.0/0
+            - IpProtocol: tcp
+              FromPort: 80
+              ToPort: 80
+              CidrIp: 0.0.0.0/0
+            - IpProtocol: tcp
+              FromPort: 443
+              ToPort: 443
+              CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: 
+            Fn::Sub: ${AWS::StackName}-${Name}-sg
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+            - sts:AssumeRole
+      Policies:
+        - PolicyName: ECSContainerInstancePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement: 
+            - Effect: Allow
+              Action: 
+              - ecs:RegisterContainerInstance
+              - ecs:DeregisterContainerInstance
+              Resource: 
+                Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+            - Effect: Allow
+              Action:
+              - ecs:DiscoverPollEndpoint
+              - ecs:Submit*
+              - ecs:Poll
+              - ecs:StartTelemetrySession
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - ecr:BatchCheckLayerAvailability
+              - ecr:BatchGetImage
+              - ecr:GetDownloadUrlForLayer
+              - ecr:GetAuthorizationToken
+              Resource: "*"
+            - Effect: Allow
+              Action:
+              - kms:Decrypt
+              Resource:
+                Fn::ImportValue: CfnMasterKeyArn
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+              Resource:
+              - Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${AWS::StackName}*
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - Ref: InstanceRole
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+  CPUCreditBalance:
+    Type: AWS::CloudWatch::Alarm
+    Condition: T2InstanceType
+    DependsOn:
+      - AutoscalingGroup
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ${Name} low CPU credit balance
+      MetricName: CPUCreditBalance
+      Namespace: AWS/EC2
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value:
+            Ref: AutoscalingGroup
+  CPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - AutoscalingGroup
+    Properties:
+      AlarmDescription: 
+        Fn::Sub: ${AWS::StackName} ${Name} CPU utilization check
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value:
+            Ref: AutoscalingGroup
+  StatusCheck:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn:
+      - AutoscalingGroup
+    Properties:
+      AlarmDescription: Autoscaling group status check
+      MetricName: StatusCheckFailed
+      Namespace: AWS/EC2
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value:
+            Ref: AutoscalingGroup
+  # LifecycleHookRole:
+  #   Type: "AWS::IAM::Role"
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Action:
+  #             - sts:AssumeRole
+  #           Effect: Allow
+  #           Principal:
+  #             Service: autoscaling.amazonaws.com
+  #     ManagedPolicyArns:
+  #       - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
+  # LifecycleFunctionRole:
+  #   Type: "AWS::IAM::Role"
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Action:
+  #             - sts:AssumeRole
+  #           Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #     Policies:
+  #       - PolicyName: HookEventHandling
+  #         PolicyDocument:
+  #           Version: "2012-10-17"
+  #           Statement:
+  #             - Sid: CompleteLifecycleAction
+  #               Action:
+  #                 - autoscaling:CompleteLifecycleAction
+  #               Effect: Allow
+  #               Resource: "*"
+  #             - Sid: DescribeStackResource
+  #               Action:
+  #                 - cloudformation:DescribeStackResource
+  #               Effect: Allow
+  #               Resource: 
+  #                 Fn::Sub: "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*"
+  #             - Sid: ListContainerInstances
+  #               Action:
+  #                 - ecs:ListContainerInstances
+  #               Effect: Allow
+  #               Resource:
+  #                 Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}"
+  #             - Sid: ManageContainerInstances
+  #               Action:
+  #                 - ecs:DescribeContainerInstances
+  #                 - ecs:UpdateContainerInstancesState
+  #               Effect: Allow
+  #               Resource: 
+  #                 Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*"
+  #               Condition:
+  #                 ArnEquals:
+  #                   ecs:cluster: 
+  #                     Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}"
+  #             - Sid: Publish
+  #               Action:
+  #                 - sns:Publish
+  #               Effect: Allow
+  #               Resource:
+  #                 Ref: LifecycleHookTopic
+  #             - Sid: ManageLambdaLogs
+  #               Effect: Allow
+  #               Action:
+  #               - logs:CreateLogStream
+  #               - logs:PutLogEvents
+  #               Resource: 
+  #                 Fn::Sub: ${LifecycleHookFunctionLogGroup.Arn}
+  # LifecycleHookTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     TopicName: 
+  #       Fn::Sub: ${AWS::StackName}-${Name}-LifecycleHookTopic
+  # LifecycleHookSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Endpoint:
+  #       Fn::Sub: "${LifecycleHookFunction.Arn}"
+  #     Protocol: lambda
+  #     TopicArn: { "Ref": "LifecycleHookTopic" }
+  # LifecycleHook:
+  #   Type: "AWS::AutoScaling::LifecycleHook"
+  #   Properties:
+  #     AutoScalingGroupName: { "Ref": "AutoscalingGroup" }
+  #     DefaultResult: CONTINUE
+  #     HeartbeatTimeout: 600
+  #     LifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
+  #     NotificationTargetARN: { "Ref": "LifecycleHookTopic" }
+  #     RoleARN:
+  #       Fn::Sub: "${LifecycleHookRole.Arn}"
+  # LifecycleHookFunctionLogGroup:
+  #   Type: "AWS::Logs::LogGroup"
+  #   DeletionPolicy: "Delete"
+  #   Properties:
+  #     LogGroupName:
+  #       Fn::Sub: "/aws/lambda/${AWS::StackName}-${Name}-LifecycleHook"
+  #     RetentionInDays: 30
+  # LifecycleHookFunction:
+  #   Type: "AWS::Lambda::Function"
+  #   DependsOn:
+  #     - LifecycleHookFunctionLogGroup
+  #   Properties:
+  #     FunctionName:
+  #       Fn::Sub: "${AWS::StackName}-${Name}-LifecycleHook"
+  #     Code:
+  #       S3Bucket:
+  #         Fn::ImportValue: CfnLambdaBucket
+  #       S3Key: ecsTerminateHook.zip
+  #       S3ObjectVersion:
+  #         Fn::If:
+  #           - LifecycleHookLatest
+  #           - Ref: AWS::NoValue
+  #           - Ref: LifecycleHookVersion
+  #     Description: 
+  #       Fn::Sub: "${AWS::StackName} ${Name} Autoscaling Lifecycle Hook"
+  #     Environment:
+  #       Variables:
+  #         AUTOSCALING_GROUP_NAME: { "Ref": "AutoscalingGroup" }
+  #         AUTOSCALING_RESOURCE_NAME: Group
+  #         DEBUG: False
+  #         ECS_CLUSTER: { "Ref": "EcsCluster" }
+  #         STACK_NAME: { "Ref": "AWS::StackName" }
+  #         TOPIC_ARN: { "Ref": "LifecycleHookTopic" }
+  #     Handler: ecs_terminate_hook.handler
+  #     MemorySize: 128
+  #     Role:
+  #       Fn::Sub: "${LifecycleFunctionRole.Arn}"
+  #     Runtime: python2.7
+  #     Timeout: 300
+  # LifecycleHookPermission:
+  #   Type: "AWS::Lambda::Permission"
+  #   Properties:
+  #     Action: "lambda:InvokeFunction"
+  #     FunctionName: { "Ref": "LifecycleHookFunction" }
+  #     Principal: sns.amazonaws.com
+  #     SourceArn: { "Ref": "LifecycleHookTopic" }
+  EcsTaskRunnerRole:
+    Type: AWS::IAM::Role
+    Condition: CreateEcsTaskRunnerCondition
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: ECSTasks
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: ECSTasks
+            Effect: Allow
+            Action:
+              - ecs:StartTask
+              - ecs:RunTask
+              - ecs:StopTask
+              - ecs:DescribeTasks
+              - ecs:ListTasks
+            Condition:
+              ArnEquals:
+                ecs:cluster:
+                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+            Resource: "*"
+          - Sid: ECSTaskDefinitions
+            Effect: Allow
+            Action:
+              - ecs:DescribeTaskDefinition
+            Resource: "*"
+          - Sid: ECSContainerInstances
+            Effect: Allow
+            Action:
+              - ecs:ListContainerInstances
+            Resource:
+              - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+          - Sid: InvokeSelf
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-${Name}-ecsTasks
+          - Sid: StackStatus
+            Effect: Allow
+            Action:
+              - cloudformation:DescribeStacks
+            Resource:
+              Fn::Sub: arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/${AWS::StackId}
+          - Sid: CreateLambdaLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: 
+              Fn::Sub: ${EcsTaskRunnerLogGroup.Arn}
+  EcsTaskRunner:
+    Type: "AWS::Lambda::Function"
+    Condition: CreateEcsTaskRunnerCondition
+    DependsOn:
+      - EcsTaskRunnerLogGroup
+    Properties:
+      Description:
+        Fn::Sub: "${AWS::StackName} ${Name} ECS Task Runner"
+      Handler: "ecs_tasks.handler"
+      MemorySize: 128
+      Runtime: "python2.7"
+      Timeout: 300
+      Role:
+        Fn::Sub: "${EcsTaskRunnerRole.Arn}"
+      FunctionName: 
+        Fn::Sub: "${AWS::StackName}-${Name}-ecsTasks"
+      Code:
+        S3Bucket:
+          Fn::ImportValue: CfnLambdaBucket
+        S3Key: "ecsTasks.zip"
+        S3ObjectVersion:
+          Fn::If:
+            - EcsTaskRunnerLatest
+            - Ref: AWS::NoValue
+            - Ref: EcsTaskRunnerVersion
+  EcsTaskRunnerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: CreateEcsTaskRunnerCondition
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-ecsTasks
+      RetentionInDays:
+        Ref: LogRetention
+
+Outputs:
+  SecurityGroup:
+    Description: Autoscaling Security Group ID
+    Value:
+      Ref: SecurityGroup
+  InstanceRole:
+    Description: Autoscaling Instance Role Name
+    Value:
+      Ref: InstanceRole
+  EcsCluster:
+    Description: Autoscaling ECS Cluster
+    Value:
+      Ref: EcsCluster
+  EcsTaskRunner:
+    Condition: CreateEcsTaskRunnerCondition
+    Description: ECS Task Runner Function
+    Value:
+      Ref: EcsTaskRunner

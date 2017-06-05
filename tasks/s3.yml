@@ -5,7 +5,7 @@
     changed_when: false
     register: cf_aws_identity
   - debug: msg={{ cf_aws_identity }}
-    when: debug | default(false)
+    when: debug
   - name: set aws account fact
     set_fact:
       cf_account_id: "{{ (cf_aws_identity.stdout | from_json).get('Account') }}"

@@ -11,9 +11,9 @@
         state: present
         template: "{{ cf_stack_template_path | default(omit) }}"
         template_url: "{{ cf_s3_template_url | default(omit) }}"
-        template_parameters: "{{ cf_stack_inputs | default({}) }}"
-        disable_rollback: "{{ cf_disable_rollback | default(false) | bool }}"
-        tags: "{{ cf_stack_tags | default({}) }}"
+        template_parameters: "{{ cf_stack_inputs }}"
+        disable_rollback: "{{ cf_disable_rollback }}"
+        tags: "{{ cf_stack_tags }}"
       register: cf_stack_result
   tags:
     - deploy
@@ -28,6 +28,6 @@
       set_fact:
         cf_stack_facts: "{{ cloudformation[cf_stack_name] }}"
     - debug: msg={{ cf_stack_facts }}
-      when: debug | default(false) | bool
+      when: debug
   tags:
     - deploy
