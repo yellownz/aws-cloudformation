@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cloudfront Resources Stack
+
+Mappings:
+  Region:
+    us-east-1:
+      S3HostedZoneId: Z3AQBSTGFYJSTF
+      S3WebsiteEndpoint: s3-website-us-east-1.amazonaws.com
+    us-west-1:
+      S3HostedZoneId: Z2F56UZL2M1ACD
+      S3WebsiteEndpoint: s3-website-us-west-1.amazonaws.com
+    us-west-2:
+      S3HostedZoneId: Z3BJ6K6RIION7M
+      S3WebsiteEndpoint: s3-website-us-west-2.amazonaws.com
+    eu-west-1:
+      S3HostedZoneId: Z1BKCTXD74EZPE
+      S3WebsiteEndpoint: s3-website-eu-west-1.amazonaws.com
+    ap-southeast-1:
+      S3HostedZoneId: Z3O0J2DXBE1FTB
+      S3WebsiteEndpoint: s3-website-ap-southeast-1.amazonaws.com
+    ap-southeast-2:
+      S3HostedZoneId: Z1WCIGYICN2BYD
+      S3WebsiteEndpoint: s3-website-ap-southeast-2.amazonaws.com
+    ap-northeast-1:
+      S3HostedZoneId: Z2M4EHUR26P7ZW
+      S3WebsiteEndpoint: s3-website-ap-northeast-1.amazonaws.com
+    sa-east-1:
+      S3HostedZoneId: Z31GFT0UA1I2HV
+      S3WebsiteEndpoint: s3-website-sa-east-1.amazonaws.com
+
+Parameters:
+  FullyQualifiedDomainName:
+    Type: String
+    AllowedPattern: (?!-)[a-zA-Z0-9-.]{1,63}(?<!-)
+  AcmCertificateArn:
+    Type: String
+    Default: ""
+  Comment:
+    Type: String
+    Default: "A Cloudfront Distribution"
+  AllowedCacheMethods:
+    Type: CommaDelimitedList
+    Default: "HEAD,GET"
+  HTTPPort:
+    Type: Number
+    Default: "80"
+  HTTPSPort:
+    Type: Number
+    Default: "443"
+  OriginPort:
+    Type: Number
+    Default: "80"
+  OriginProtocolPolicy:
+    Type: String
+    Default: http-only
+    AllowedValues:
+      - http-only
+      - https-only
+  CookiesForward:
+    Type: String
+    Default: all
+    AllowedValues:
+      - all
+      - none
+  PriceClass:
+    Type: String
+    Default: PriceClass_All
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+  SSLSupportMethod:
+    Type: String
+    Default: sni-only
+  Enabled:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - true
+      - false
+
+Conditions:
+  UseCertificate:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: AcmCertificateArn
+          - ""
+
+Resources:
+  Cloudfront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment:
+          Ref: Comment
+        Origins:
+        - DomainName: react-template-app.callowayart.com.s3-website-us-west-2.amazonaws.com
+          Id: S3Origin
+          CustomOriginConfig:
+            HTTPPort:
+              Ref: HTTPPort
+            HTTPSPort:
+              Ref: HTTPSPort
+            OriginProtocolPolicy:
+              Ref: OriginProtocolPolicy
+        Enabled:
+          Ref: Enabled
+        HttpVersion: http2
+        DefaultRootObject: index.html
+        Aliases:
+          - Ref: FullyQualifiedDomainName
+        DefaultCacheBehavior:
+          AllowedMethods:
+            Ref: AllowedCacheMethods
+          Compress: true
+          TargetOriginId:
+            Fn::Join:
+              - "-"
+              - - target-origin-id
+                - Ref: FullyQualifiedDomainName
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward:
+                Ref: CookiesForward
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass:
+          Ref: PriceClass
+        ViewerCertificate:
+          AcmCertificateArn:
+            Ref: AcmCertificateArn
+          SslSupportMethod:
+            Ref: SSLSupportMethod
