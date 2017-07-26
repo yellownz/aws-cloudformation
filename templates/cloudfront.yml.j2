@@ -1,0 +1,264 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Cloudfront Resources Stack
+
+Mappings:
+  Region:
+    us-east-1:
+      S3HostedZoneId: Z3AQBSTGFYJSTF
+      S3WebsiteEndpoint: s3-website-us-east-1.amazonaws.com
+    us-west-1:
+      S3HostedZoneId: Z2F56UZL2M1ACD
+      S3WebsiteEndpoint: s3-website-us-west-1.amazonaws.com
+    us-west-2:
+      S3HostedZoneId: Z3BJ6K6RIION7M
+      S3WebsiteEndpoint: s3-website-us-west-2.amazonaws.com
+    eu-west-1:
+      S3HostedZoneId: Z1BKCTXD74EZPE
+      S3WebsiteEndpoint: s3-website-eu-west-1.amazonaws.com
+    ap-southeast-1:
+      S3HostedZoneId: Z3O0J2DXBE1FTB
+      S3WebsiteEndpoint: s3-website-ap-southeast-1.amazonaws.com
+    ap-southeast-2:
+      S3HostedZoneId: Z1WCIGYICN2BYD
+      S3WebsiteEndpoint: s3-website-ap-southeast-2.amazonaws.com
+    ap-northeast-1:
+      S3HostedZoneId: Z2M4EHUR26P7ZW
+      S3WebsiteEndpoint: s3-website-ap-northeast-1.amazonaws.com
+    sa-east-1:
+      S3HostedZoneId: Z31GFT0UA1I2HV
+      S3WebsiteEndpoint: s3-website-sa-east-1.amazonaws.com
+
+Parameters:
+  DomainName:
+    Type: String
+    AllowedPattern: (?!-)[a-zA-Z0-9-.]{1,63}(?<!-)
+  SubDomain:
+    Type: String
+    Description: Given demo.domain.com we are looking for "demo"
+  AcmCertificateArn:
+    Type: String
+    Default: ""
+  Comment:
+    Type: String
+    Default: "A Cloudfront Distribution"
+  AllowedCacheMethods:
+    Type: String
+    Description: Allowed HTTP Verbs (Passed as comma-delimited list)
+    Default: "HEAD,GET"
+  HTTPPort:
+    Type: Number
+    Default: "80"
+  HTTPSPort:
+    Type: Number
+    Default: "443"
+  OriginPort:
+    Type: Number
+    Default: "80"
+  OriginProtocolPolicy:
+    Type: String
+    Default: https-only
+    AllowedValues:
+      - http-only
+      - https-only
+  CookiesForward:
+    Type: String
+    Default: all
+    AllowedValues:
+      - all
+      - none
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+  SSLSupportMethod:
+    Type: String
+    Default: sni-only
+  Enabled:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - true
+      - false
+  DefaultRootObject:
+    Type: String
+    Default: "index.html"
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: "30"
+  AlarmErrorRateEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - true
+      - false
+  AlarmErrorRateAlarmDescription:
+    Type: String
+    Default: Alerts against the AVERAGE of HTTP error responses (4XX, 5XX)
+  AlarmErrorRatePeriod:
+    Type: Number
+    Description: The time over which the error rate is applied in seconds
+    Default: "0"
+  AlarmErrorRateEvaluationPeriods:
+    Type: Number
+    Description: The number of periods over which data is compared to the specified threshold
+    Default: "5"
+  AlarmErrorRateThreshold:
+    Type: Number
+    Description: The value against which the error-rate average is compared
+    Default: "0"
+  AlarmErrorRateAlarmActions:
+    Type: String
+    Description: |
+        The list of actions to execute when this alarm transitions into an ALARM state
+        (Passed as comma-delimited list)
+    Default: ""
+  AlarmErrorRateInsufficientDataActions:
+    Type: String
+    Description: |
+        The list of actions to execute when this alarm transitions into an INSUFFICIENT_DATA state
+        (Passed as comma-delimited list)
+    Default: ""
+  ViewerProtocolPolicy:
+    Type: String
+    Description: The protocol that viewers can use to access the files in the origin
+    AllowedValues:
+      - allow-all
+      - redirect-to-https
+      - https-only
+    Default: "https-only"
+
+Conditions:
+  UseCertificate:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: AcmCertificateArn
+        - ""
+  AlarmErrorRateEnabledCondition:
+    Fn::Equals:
+      - Ref: AlarmErrorRateEnabled
+      - true
+
+Resources:
+  Cloudfront:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment:
+          Ref: Comment
+        Origins:
+        - DomainName:
+            Fn::Join:
+              - "."
+              - - Ref: SubDomain
+                - Ref: DomainName
+                - Fn::FindInMap:
+                    - Region
+                    - Ref: "AWS::Region"
+                    - S3WebsiteEndpoint
+          Id:
+            Fn::Join:
+              - "-"
+              - - s3
+                - Ref: SubDomain
+                - Ref: DomainName
+          CustomOriginConfig:
+            HTTPPort:
+              Ref: HTTPPort
+            HTTPSPort:
+              Ref: HTTPSPort
+            OriginProtocolPolicy:
+              Ref: OriginProtocolPolicy
+        Enabled:
+          Ref: Enabled
+        HttpVersion: http2
+        DefaultRootObject:
+          Ref: DefaultRootObject
+
+        Aliases:
+          - Fn::Join:
+            - "."
+            - - Ref: SubDomain
+              - Ref: DomainName
+          {% if ((Config|default({})).Cloudfront|default({})).Aliases|default(False) %}
+            {% for alias in Config.Cloudfront.Aliases|default([]) %}
+          - "{{ alias }}"
+            {% endfor %}
+          {% endif %}
+
+        DefaultCacheBehavior:
+          AllowedMethods:
+            Fn::Split:
+              - ","
+              - Ref: AllowedCacheMethods
+          Compress: true
+          TargetOriginId:
+            Fn::Join:
+              - "-"
+              - - s3
+                - Ref: SubDomain
+                - Ref: DomainName
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward:
+                Ref: CookiesForward
+          ViewerProtocolPolicy:
+            Ref: ViewerProtocolPolicy
+        PriceClass:
+          Ref: PriceClass
+        ViewerCertificate:
+          AcmCertificateArn:
+            Ref: AcmCertificateArn
+          SslSupportMethod:
+            Ref: SSLSupportMethod
+  CloudfrontLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/cloudfront/distribution
+      RetentionInDays: { "Ref": "LogRetention" }
+  CloudfrontAlarmErrorRate:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled:
+        Ref: AlarmErrorRateEnabled
+      AlarmDescription:
+        Ref: AlarmErrorRateAlarmDescription
+      Namespace: AWS/Cloudfront
+      MetricName: ErrorRate
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value:
+            Ref: Cloudfront
+      Statistic: Average
+      Period:
+        Ref: AlarmErrorRatePeriod
+      EvaluationPeriods:
+        Ref: AlarmErrorRateEvaluationPeriods
+      Threshold:
+        Ref: AlarmErrorRateThreshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+          - AlarmErrorRateEnabledCondition
+          - Fn::Split:
+              - ","
+              - Ref: AlarmErrorRateAlarmActions
+          - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+          - AlarmErrorRateEnabledCondition
+          - Fn::Split:
+              - ","
+              - Ref: AlarmErrorRateInsufficientDataActions
+          - Ref: AWS::NoValue
