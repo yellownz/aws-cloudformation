@@ -1,0 +1,150 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: S3 Bucket and Policy stack
+
+Parameters:
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: "30"
+
+Resources:
+{% for resource, config in (Config.Buckets|default({})).items() %}
+{% set name = config.BucketName %}
+
+  {{ resource }}Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: "{{ config.DeletionPolicy|default("Retain") }}"
+    Properties:
+      BucketName: "{{ name }}"
+
+      {% if config.Public|default(False) %}
+      AccessControl: PublicRead
+      {% elif config.AccessControl|default(False) %}
+      AccessControl: "{{ config.AccessControl }}"
+      {% endif %}
+
+      Tags:
+        -
+          Key: Name
+          Value: "{{ name }}"
+        {% for key, value in (Config.Tags|default({})).items() %}
+        -
+          Key: "{{ key }}"
+          Value: "{{ value }}"
+        {% endfor %}
+
+      {% if config.WebsiteConfiguration|default(False) %}
+      WebsiteConfiguration:
+        IndexDocument: "{{ config.WebsiteConfiguration.IndexDocument }}"
+        ErrorDocument: "{{ config.WebsiteConfiguration.ErrorDocument }}"
+      {% endif %}
+
+  {% if config.CloudfrontOriginAccessIdentity|default(False) %}
+  {{ resource }}CloudfrontBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: "{{ resource }}Bucket"
+      PolicyDocument:
+        Statement:
+        - Sid: "{{ resource }}CloudfrontBucketPolicyStatement"
+          Effect: Allow
+          Principal:
+            AWS:
+              - arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {{ config.CloudfrontOriginAccessIdentity}}
+          Resource: arn:aws:s3:::{{ name }}/*
+          Action:
+            - s3:GetObject
+  {% endif %}
+
+  {% if config.Public|default(False) %}
+  {{ resource }}PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: "{{ resource }}Bucket"
+      PolicyDocument:
+        Statement:
+        - Sid: "{{ resource }}PublicBucketPolicyStatement"
+          Effect: Allow
+          Principal: "*"
+          Resource: arn:aws:s3:::{{ name }}/*
+          Action:
+            - s3:GetObject
+  {% endif %}
+
+  {% if config.ReadOnlyAccounts|default(False) %}
+  {{ resource }}ReadOnlyAccountsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: "{{ resource }}Bucket"
+      PolicyDocument:
+        Statement:
+        - Sid: "{{ resource }}GetReadOnlyAccountsBucketPolicyStatement"
+          Effect: Allow
+          Principal:
+            AWS:
+              {% for id in config.ReadOnlyAccounts|default([]) %}
+              - arn:aws:iam::{{ id }}:root
+              {% endfor %}
+          Resource: arn:aws:s3:::{{ name }}/*
+          Action:
+            - s3:GetObject
+        - Sid: "{{ resource }}ListReadOnlyAccountsBucketPolicyStatement"
+          Effect: Allow
+          Principal:
+            AWS:
+              {% for id in config.ReadOnlyAccounts|default([]) %}
+              - arn:aws:iam::{{ id }}:root
+              {% endfor %}
+          Resource: arn:aws:s3:::{{ name }}
+          Action:
+            - s3:GetBucketLocation
+            - s3:ListBucket
+  {% endif %}
+
+  {% if config.ReadWriteAccounts|default(False) %}
+  {{ resource }}MutateReadWriteAccountsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: "{{ resource }}Bucket"
+      PolicyDocument:
+        Statement:
+        - Sid: "{{ resource }}MutateReadWriteAccountsBucketPolicyStatement"
+          Effect: Allow
+          Principal:
+            AWS:
+              {% for id in config.ReadWriteAccounts|default([]) %}
+              - arn:aws:iam::{{ id }}:root
+              {% endfor %}
+          Resource: arn:aws:s3:::{{ name }}/*
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+        - Sid: "{{ resource }}ListReadWriteAccountsBucketPolicyStatement"
+          Effect: Allow
+          Principal:
+            AWS:
+              {% for id in config.ReadOnlyAccounts|default([]) %}
+              - arn:aws:iam::{{ id }}:root
+              {% endfor %}
+          Resource: arn:aws:s3:::{{ name }}
+          Action:
+            - s3:GetBucketLocation
+            - s3:ListBucket
+  {% endif %}
+
+  {{ resource }}BucketLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/s3/{{ Stack.Name }}/{{ resource }}
+      RetentionInDays: { "Ref": "LogRetention" }
+{% endfor %}
