@@ -1,0 +1,59 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: DNS Resources
+
+Resources:
+  {% for resource, zone in (Config.Zones|default({})).items() %}
+  {% if zone.Create|default(False) %}
+  {{ resource }}HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      Name: "{{ zone.Name }}"
+      {% if Config.VPC|default(False) %}
+      VPCs:
+        {% for vpc in Config.VPC %}
+        -
+          VPCId: "{{ vpc.Id }}"
+          VPCRegion: "{{ vpc.Region }}"
+        {% endfor %}
+      {% endif %}
+      HostedZoneTags:
+        -
+          Key: Name
+          Value: "{{ Config.Name|default('dns.yml.j2') }}"
+        {% for key, value in (Config.Tags|default({})).items() %}
+        -
+          Key: "{{ key }}"
+          Value: "{{ value }}"
+        {% endfor %}
+  {% endif %}
+
+  {% if zone.Records|default(False) %}
+  {{ resource }}RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    {% if zone.Create %}
+    DependsOn:
+      - {{ resource }}HostedZone
+    {% endif %}
+    Properties:
+      HostedZoneName: {{ zone.Name }}.
+      RecordSets:
+      {% for record in zone.Records|default([]) %}
+      - Name: {{ record.Name }}{% if record.Name %}.{% endif %}{{ zone.Name }}.
+        Type: {{ record.Type }}
+        {% if record.Alias|default(False) %}
+        AliasTarget:
+          HostedZoneId: {{ record.Alias.ZoneId }}
+          DNSName: {{ record.Alias.Target }}
+        {% else %}
+        TTL: {{ record.TTL|default(300) }}
+        ResourceRecords:
+          {% for value in record.Values|default([]) %}
+          - {{ value }}
+          {% endfor %}
+        {% endif %}
+      {% endfor%}
+  {% endif %}
+  {% endfor %}
