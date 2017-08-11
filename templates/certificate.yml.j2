@@ -1,0 +1,21 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: SSL Certifictes
+
+Resources:
+{% for resource, config in (Config.Certificates|default({})).items() %}
+  {{ resource }}Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: "{{ config.DomainName }}"
+      SubjectAlternativeNames:
+        {{ config.SubjectAlternativeNames | default([]) | to_nice_yaml(indent=2) | indent(8, False) }}
+      DomainValidationOptions:
+        - DomainName: "{{ config.DomainName }}"
+          ValidationDomain: "{{ config.DomainName|regex_replace('^(.+?)?(?P<root>[a-z\-]+?\.[a-z]+)$', '\\g<root>') }}"
+        {% for option in config.ValidationOptions|default([]) %}
+        - DomainName: "{{ option.DomainName }}"
+          ValidationDomain: "{{ option.ValidationDomain }}"
+        {% endfor %}
+{% endfor %}
