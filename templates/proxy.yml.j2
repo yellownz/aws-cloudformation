@@ -57,7 +57,7 @@ Resources:
       HostedZoneName:
         Fn::Join: ["", [ "Fn::ImportValue": "DefaultVpcDomain", "." ] ]
       Type: "CNAME"
-      Comment: 
+      Comment:
         Fn::Sub: "Forward Proxy - ${AWS::StackName}"
       ResourceRecords:
         - Fn::Sub: "${ApplicationLoadBalancer.DNSName}"
@@ -167,7 +167,7 @@ Resources:
       KeyName: { "Ref": "ApplicationKeyName" }
       SecurityGroups:
         - Ref: "ApplicationAutoscalingSecurityGroup"
-      UserData: 
+      UserData:
         Fn::Base64:
           Fn::Join: ["\n", [
             "#!/bin/bash",
@@ -233,7 +233,7 @@ Resources:
                 Action:
                   - "ecs:RegisterContainerInstance"
                   - "ecs:DeregisterContainerInstance"
-                Resource: 
+                Resource:
                   Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}"
               - Effect: "Allow"
                 Action:
@@ -243,7 +243,7 @@ Resources:
                   - "ecs:StartTelemetrySession"
                 Resource: "*"
               - Effect: "Allow"
-                Action: 
+                Action:
                   - "ecr:BatchCheckLayerAvailability"
                   - "ecr:BatchGetImage"
                   - "ecr:GetDownloadUrlForLayer"
@@ -268,7 +268,7 @@ Resources:
         LogConfiguration:
           LogDriver: awslogs
           Options:
-            awslogs-group: 
+            awslogs-group:
               Fn::Sub: ${AWS::StackName}/ecs/ProxyService/squid
             awslogs-region: { "Ref": "AWS::Region" }
             awslogs-stream-prefix: docker
@@ -279,9 +279,12 @@ Resources:
         Environment:
         - Name: SQUID_WHITELIST
           Value: { "Ref": "ProxyWhitelist" }
+        - Name: AWS_REGIONS
+          Value:
+            Ref: AWS::Region
   ProxyService:
     Type: "AWS::ECS::Service"
-    DependsOn: 
+    DependsOn:
       - ApplicationAutoscaling
       - ProxyServiceLogGroup
     Properties:
@@ -303,7 +306,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: "Allow"
-            Principal: 
+            Principal:
               Service: [ "ecs.amazonaws.com" ]
             Action: [ "sts:AssumeRole" ]
       Path: "/"
@@ -351,7 +354,7 @@ Resources:
       LogGroupName:
         Fn::Sub: "${AWS::StackName}/ecs/ProxyService/squid"
       RetentionInDays: { "Ref": "LogsRetention" }
-   
+
 Outputs:
   ProxyURL:
     Description: "Squid Proxy URL"
