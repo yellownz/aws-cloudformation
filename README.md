@@ -268,8 +268,14 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.9.1
+
+- **ENHANCEMENT** : Support list of default dependency mappings in stack transform feature
+- **BUG FIX** : Fix issue where DependsOn property renaming for stack transform resource fails if component resource does not having existing DependsOn property
+
 ### Version 0.9.0
 
+- **NEW FEATURE** : Added stack transforms, a new feature to support merging component templates into a master template
 - **NEW FEATURE** : Added stack overrides, a new syntax to override portions of the stack template
 - **BREAKING CHANGE** : Auto generated stack inputs now rely on the `Stack.Inputs` dictionary, and support the same dot notation naming scheme of stack overrides
 - **ENHANCEMENT**: Add S3 bucket name exports to [CloudFormation template](`templates/cfn.yml.j2`)
