@@ -105,6 +105,9 @@ def search_and_replace(data, search, replace, as_value=False):
       node[key] = replace
     elif key == 'DependsOn' and search in item and parent_key != 'Properties' and isinstance(replace, (basestring,int)):
       node[key][item.index(search)] = replace
+    elif key == 'DependsOn' and search in item and parent_key != 'Properties' and isinstance(replace, list):
+      del node[key][item.index(search)]
+      node[key] += replace
     elif key == 'Fn::Sub' and '${%s' % search in item:
       replace_value = str(replace)
       if as_value:
@@ -242,11 +245,15 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   for transform in transforms:
     name = transform['name']
     output = transform['output']
-    dependency_mapping = output.get('Metadata',{}).get('Stack::Transform',{}).get('DefaultDependencyMappings',[None])[0]
+    dependency_mapping = output.get('Metadata',{}).get(STACK_TRANSFORM,{}).get('DefaultDependencyMappings',[])
     dependencies = transform['resource'].get('DependsOn')
-    if dependencies and dependency_mapping:
-      logging.debug("%s: Attaching 'DependsOn: %s' to default resource %s", name, dependencies, name+dependency_mapping)
-      output['Resources'][name+dependency_mapping]['DependsOn'] += dependencies
+    for mapping in dependency_mapping:
+      if dependencies:
+        logging.debug("%s: Attaching 'DependsOn: %s' to default resource %s", name, dependencies, name+mapping)
+        if output['Resources'][name+mapping].get('DependsOn'):
+          output['Resources'][name+mapping]['DependsOn'] += dependencies
+        else:
+          output['Resources'][name+mapping]['DependsOn'] = dependencies
     logging.debug("%s: Replacing transformed output values in main stack", name)
     for key,value in output.get('Outputs', {}).iteritems():
       replaced_value = value['Value']
@@ -261,8 +268,9 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     del data['Resources'][transform['name']]
     # Finally replace any DependsOn references to transform with the default dependency mapping
     if dependency_mapping:
-      logging.debug("%s: Replacing '%s' dependencies with default mapping %s", name, name, name+dependency_mapping)
-      search_and_replace(data, name, name+dependency_mapping, as_value=True)
+      renamed_dependency_mapping = [name+mapping for mapping in dependency_mapping]
+      logging.debug("%s: Replacing '%s' dependencies with default mapping %s", name, name, renamed_dependency_mapping)
+      search_and_replace(data, name, renamed_dependency_mapping, as_value=True)
   return data
 
 def property_transform(data, filter_paths=[]):
