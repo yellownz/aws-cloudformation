@@ -70,11 +70,11 @@ $ git commit -a -m "Updated to aws-cloudformation 0.2.0 role"
 
 This role is designed to be used with CloudFormation stacks and relies on a CloudFormation template file being provided by the consuming playbook.
 
-The default convention is to create the template file at the path `templates/stack.yml.j2` in the playbook repository.  
+The default convention is to create the template file at the path `templates/stack.yml.j2` in the playbook repository.
 
 > You can override the default template file by setting the `cf_stack_template` variable.
 
-The expected format of the CloudFormation template is a [Jinja2 template](http://jinja.pocoo.org/docs/dev/), although you can provide a literal template.  This allows you to perform Jinja2 template variable substitution and more advanced constructs to generate your CloudFormation templates. 
+The expected format of the CloudFormation template is a [Jinja2 template](http://jinja.pocoo.org/docs/dev/), although you can provide a literal template.  This allows you to perform Jinja2 template variable substitution and more advanced constructs to generate your CloudFormation templates.
 
 The recommended approach is to describe your template in a YAML format, as this role will automatically convert to a minified JSON format.
 
@@ -114,7 +114,7 @@ Parameters:
     Type: String
     Description: Application Amazon Machine Image Id
   ApplicationInstanceType:
-    Type: String 
+    Type: String
     Description: Application EC2 Instance Type
     Default: t2.micro
     AllowedValues:
@@ -124,7 +124,7 @@ Parameters:
       - t2.large
       - m4.large
   ApplicationAutoscalingDesiredCount:
-    Type: Number 
+    Type: Number
     Description: Application AutoScaling Group Desired Count
 ...
 ...
@@ -186,7 +186,7 @@ This will set to the stack policy to the following policy before stack modificat
   }
 ```
 
-And then after stack modification is complete, reset the stack policy to it's previous state.  
+And then after stack modification is complete, reset the stack policy to it's previous state.
 
 > Note: This role will also reset the stack policy in the event of a stack modification failure
 
@@ -202,7 +202,7 @@ This role sets the following facts that you can use subsequently in your roles:
 
 This role includes Jinja macros which can automatically generate CloudFormation resources using common conventions and patterns.
 
-Macros are located in the [`macros`](./macros) folder and create resources and outputs for various resource types.  
+Macros are located in the [`macros`](./macros) folder and create resources and outputs for various resource types.
 
 Macros are structured according to the following conventions:
 
@@ -268,6 +268,19 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.9.4
+
+- **BUG FIX** : Removed jinja references to Stack.Name in template s3.yml.j2 since it is redundant and susceptible to breakage `./templates/s3.yml/j2`
+
+### Version 0.9.3
+
+- **NEW FEATURE** : Added generic [cloudfront template](`https://github.com/Casecommons/aws-cloudformation/pull/2`)
+- - **NEW FEATURE** : Added generic [s3 template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
+- - **ENHANCEMENT** : Updated jinja indentation on [ecr template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
+- - **NEW FEATURE** : Added generic [dns template](`https://github.com/Casecommons/aws-cloudformation/pull/7`)
+- - **NEW FEATURE** : Added generic CA [certificate template](`https://github.com/Casecommons/aws-cloudformation/pull/9`)
+
+
 ### Version 0.9.2
 
 - **BUG FIX** : Output `config.json` with all values as strings (required for CodePipeline CloudFormation deployment support)
@@ -300,7 +313,7 @@ The following is an example of a playbook configured to use this role.  Note the
 
 - **ENHANCEMENT** : Update [proxy template](`templates/proxy.yml.j2`) autoscaling update policy to match input desired count
 - **ENHANCEMENT** : Add whitelist support for [proxy template](`templates/proxy.yml.j2`)
-- **ENHANCEMENT** : Add disable whitelist support for [proxy template](`templates/proxy.yml.j2`) 
+- **ENHANCEMENT** : Add disable whitelist support for [proxy template](`templates/proxy.yml.j2`)
 - **ENHANCEMENT** : Add support for VPC Flow Logs to [network template]('templates/network.yml.j2')
 
 ### Version 0.6.0
@@ -314,8 +327,8 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ### Version 0.4.0
 
-- **ENHANCEMENT** : Add `cf_stack_facts` output 
-- **BUG FIX** : Fix missing substituion in proxy template 
+- **ENHANCEMENT** : Add `cf_stack_facts` output
+- **BUG FIX** : Fix missing substituion in proxy template
 
 ### Version 0.3.1
 

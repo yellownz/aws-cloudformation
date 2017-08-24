@@ -145,6 +145,6 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: ${AWS::StackName}/s3/{{ Stack.Name }}/{{ resource }}
+        Fn::Sub: ${AWS::StackName}/s3/{{ resource }}
       RetentionInDays: { "Ref": "LogRetention" }
 {% endfor %}
