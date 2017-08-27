@@ -268,6 +268,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.9.2
+
+- **BUG FIX** : Output `config.json` with all values as strings (required for CodePipeline CloudFormation deployment support)
+
 ### Version 0.9.1
 
 - **ENHANCEMENT** : Support list of default dependency mappings in stack transform feature
