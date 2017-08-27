@@ -271,6 +271,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.9.5
 
 - **ENHANCEMENT** : Include stack tags with generated `config.json` files
+- **BUG FIX** : Output `config.json` with all values as strings (required for CodePipeline CloudFormation deployment support)
 
 ### Version 0.9.4
 
