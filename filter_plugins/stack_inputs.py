@@ -11,7 +11,7 @@ def stack_inputs(inputs, config):
   result = {}
   for key,value in inputs.items():
     try:
-      result[key] = config.get(key) or value['Default']
+      result[key] = str(config.get(key) or value['Default'])
     except KeyError as e:
       raise KeyError("Missing variable for %s input.  Please define this variable or specify a 'Default' property for the input." % key)
   return result
