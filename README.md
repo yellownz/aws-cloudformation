@@ -268,6 +268,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 0.9.5
+
+- **ENHANCEMENT** : Include stack tags with generated `config.json` files
+
 ### Version 0.9.4
 
 - **BUG FIX** : Removed jinja references to Stack.Name in template s3.yml.j2 since it is redundant and susceptible to breakage `./templates/s3.yml/j2`
@@ -280,6 +284,9 @@ The following is an example of a playbook configured to use this role.  Note the
 - - **NEW FEATURE** : Added generic [dns template](`https://github.com/Casecommons/aws-cloudformation/pull/7`)
 - - **NEW FEATURE** : Added generic CA [certificate template](`https://github.com/Casecommons/aws-cloudformation/pull/9`)
 
+### Version 0.9.3
+
+- **ENHANCEMENT** : Include stack tags with generated `config.json` files
 
 ### Version 0.9.2
 
