@@ -1,0 +1,68 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Stack
+
+Parameters:
+  VpcId:
+    Type: String
+    Default: DefaultVpcId
+
+Resources:
+{% for resource, group in (Config.SecurityGroups|default({})).iteritems() %}
+  {{ resource }}:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName:
+        Fn::Sub: "${AWS::StackName} {{ group.Name|default(resource) }}"
+      GroupDescription:
+        Fn::Sub: "${AWS::StackName}/{{ resource }}: {{ group.Description|default('') }}"
+      VpcId:
+        Ref: VpcId
+      Tags:
+        - Key: Name
+          Value: "{{ group.Name|default(resource) }}"
+
+  {% for item in group.Ingress|default([]) %}
+  {{ resource }}{{ item.Port|regex_replace("[^a-zA-Z0-9]", "") }}Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Ref: {{ resource }}
+      IpProtocol: "{{ item.Protocol|default('tcp') }}"
+      FromPort: "{{ item.Port }}"
+      ToPort: "{{ item.Port }}"
+      {% if item.CidrIp|default(False) %}
+      CidrIp:
+        {{
+          item.CidrIp|to_nice_yaml(indent=2)|indent(8, False) if item.CidrIp is mapping
+          else item.CidrIp
+        }}
+      {% else %}
+      SourceSecurityGroupId:
+        {{ item.Source|to_nice_yaml(indent=2)|indent(8, False) }}
+      {% endif %}
+  {% endfor %}
+
+  {% for item in group.Egress|default([]) %}
+  {{ resource }}{{ item.Port|regex_replace("[^a-zA-Z0-9]", "") }}Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId:
+        Ref: {{ resource }}
+      IpProtocol: "{{ item.Protocol|default('tcp') }}"
+      FromPort: "{{ item.Port }}"
+      ToPort: "{{ item.Port }}"
+      {% if item.CidrIp|default(False) %}
+      CidrIp:
+        {{
+          item.CidrIp|to_nice_yaml(indent=2)|indent(8, False) if item.CidrIp is mapping
+          else item.CidrIp
+        }}
+      {% else %}
+      DestinationSecurityGroupId:
+        {{ item.Destination|to_nice_yaml(indent=2)|indent(8, False) }}
+      {% endif %}
+  {% endfor %}
+{% endfor %}

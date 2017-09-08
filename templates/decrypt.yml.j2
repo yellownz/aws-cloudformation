@@ -1,0 +1,96 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Generic Decrypt Task
+
+Parameters:
+  Ciphertext:
+    Type: String
+    Description: Encoded text to be decrypted
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+
+Resources:
+  Decrypt:
+    Type: Custom::Decrypt
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${Decrypter.Arn}
+      Ciphertext:
+        Ref: Ciphertext
+
+  DecryptLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-cfnKmsDecrypt
+      RetentionInDays:
+        Ref: LogRetention
+
+  Decrypter:
+    Type: AWS::Lambda::Function
+    DependsOn:
+      - DecryptLogGroup
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} Decrypter
+      Handler: cfn_kms_decrypt.handler
+      MemorySize: 128
+      Runtime: python2.7
+      Timeout: 300
+      Role:
+        Fn::Sub: ${DecryptRole.Arn}
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-cfnKmsDecrypt
+      Code:
+        S3Bucket:
+          Fn::Sub: ${AWS::AccountId}-cfn-lambda
+        S3Key: cfnKmsDecrypt.zip
+
+  DecryptRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - "sts:AssumeRole"
+      Policies:
+      - PolicyName: DecryptPolicy
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: "Decrypt"
+            Effect: "Allow"
+            Action:
+            - "kms:Decrypt"
+            - "kms:DescribeKey"
+            Resource:
+              Fn::ImportValue: CfnMasterKeyArn
+          - Sid: "ManageLambdaLogs"
+            Effect: "Allow"
+            Action:
+            - "logs:CreateLogStream"
+            - "logs:DescribeLogStreams"
+            - "logs:PutLogEvents"
+            Resource:
+              Fn::Sub: "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-cfnKmsDecrypt:*:*"
+
+Outputs:
+  Decrypted:
+    Description: Decrypted value
+    Value:
+      Ref: Decrypt
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}Decrypted

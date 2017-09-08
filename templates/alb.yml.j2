@@ -1,3 +1,5 @@
+#jinja2: lstrip_blocks: True
+---
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: Application Load Balancer Stack
@@ -52,9 +54,11 @@ Parameters:
   DnsHostname:
     Type: String
     Description: Hostname portion of FQDN of load balancer
+    Default: ""
   DnsDomain:
     Type: String
     Description: Domain portion of FQDN of load balancer
+    Default: ""
   HttpPort:
     Type: Number
     Description: Load balancer HTTP listener port
@@ -89,6 +93,7 @@ Parameters:
   TargetGroupPort:
     Type: Number
     Description: Default target group backend port
+    Default: 0
   TargetGroupProtocol:
     Type: String
     Description: Default target group backend protocol
@@ -109,11 +114,6 @@ Parameters:
     Default: Default
 
 Conditions:
-  CustomSecurityGroupCondition:
-    Fn::Not:
-      - Fn::Equals:
-        - Ref: CustomSecurityGroup
-        - NONE
   CloudwatchAlarmsTopicExists:
     Fn::Not:
       - Fn::Equals:
@@ -159,20 +159,41 @@ Conditions:
     Fn::Equals:
       - Ref: AzCount
       - 3
+  CustomSecurityGroupCondition:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomSecurityGroup
+        - NONE
+  DnsExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: DnsDomain
+        - ""
+  DnsExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: DnsDomain
+        - ""
+  TargetGroupEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: TargetGroupPort
+        - 0
 
 Resources:
   DnsRecord:
     Type: AWS::Route53::RecordSet
+    Condition: DnsExists
     Properties:
-      Name: 
+      Name:
         Fn::Sub: ${DnsHostname}.${DnsDomain}
       TTL: 300
       HostedZoneName:
         Fn::Sub: ${DnsDomain}.
       Type: CNAME
-      Comment: 
+      Comment:
         Fn::Sub: ${AWS::StackName} ${Name} DNS Record
-      ResourceRecords: 
+      ResourceRecords:
         - Fn::Sub: ${LoadBalancer.DNSName}
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -205,14 +226,15 @@ Resources:
         - Key: idle_timeout.timeout_seconds
           Value:
             Ref: ConnectionIdleTimeout
-      Tags: 
+      Tags:
         - Key: Name
-          Value: 
+          Value:
             Fn::Sub: ${AWS::StackName}-${Name}
+
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 
+      GroupDescription:
         Fn::Sub: ${AWS::StackName} ${Name} Http Listener Security Group
       VpcId:
         Fn::ImportValue:
@@ -262,9 +284,12 @@ Resources:
         - Key: Name
           Value:
             Fn::Sub: ${AWS::StackName}-${Name}-sg
+
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HttpEnabled
+    DependsOn:
+      - LoadBalancer
     Properties:
       DefaultActions:
         - TargetGroupArn:
@@ -278,6 +303,8 @@ Resources:
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: HttpsEnabled
+    DependsOn:
+      - LoadBalancer
     Properties:
       DefaultActions:
         - TargetGroupArn:
@@ -293,6 +320,9 @@ Resources:
             Ref: Certificate
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: TargetGroupEnabled
+    DependsOn:
+      - LoadBalancer
     Properties:
       VpcId:
         Fn::ImportValue:
@@ -307,6 +337,111 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value:
             Ref: ConnectionDrainTimeout
+  TargetGroupTargetResponseTime:
+    Type: AWS::CloudWatch::Alarm
+    Condition: LoadBalancerMetricsEnabled
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb latency check
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupUnHealthyHostCount:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb unhealthy host check
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupHTTPCodeELB5XX:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb HTTP 5XX code check
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+  TargetGroupRejectedConnectionCount:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: LoadBalancerMetricsEnabled
+    DependsOn:
+      - LoadBalancer
+    Properties:
+      AlarmDescription: alb rejected connection count check
+      MetricName: RejectedConnectionCount
+      Namespace: AWS/ApplicationELB
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 10
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
+        - Name: TargetGroup
+          Value:
+            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+
   ToTargetGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -423,106 +558,7 @@ Resources:
         - Name: LoadBalancer
           Value:
             Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
-  TargetGroupTargetResponseTime:
-    Type: AWS::CloudWatch::Alarm
-    DependsOn:
-      - LoadBalancer
-    Properties:
-      AlarmDescription: alb latency check
-      MetricName: TargetResponseTime
-      Namespace: AWS/ApplicationELB
-      Statistic: Average
-      Period: 60
-      EvaluationPeriods: 5
-      Threshold: 2
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        Fn::If:
-        - CloudwatchAlarmsTopicExists
-        - Ref: CloudwatchAlarms
-        - Ref: AWS::NoValue
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
-        - Name: TargetGroup
-          Value:
-            Fn::Sub: ${TargetGroup.TargetGroupFullName}
-  TargetGroupUnHealthyHostCount:
-    Type: "AWS::CloudWatch::Alarm"
-    DependsOn:
-      - LoadBalancer
-    Properties:
-      AlarmDescription: alb unhealthy host check
-      MetricName: UnHealthyHostCount
-      Namespace: AWS/ApplicationELB
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 10
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        Fn::If:
-        - CloudwatchAlarmsTopicExists
-        - Ref: CloudwatchAlarms
-        - Ref: AWS::NoValue
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
-        - Name: TargetGroup
-          Value:
-            Fn::Sub: ${TargetGroup.TargetGroupFullName}
-  TargetGroupHTTPCodeELB5XX:
-    Type: "AWS::CloudWatch::Alarm"
-    DependsOn:
-      - LoadBalancer
-    Properties:
-      AlarmDescription: alb HTTP 5XX code check
-      MetricName: HTTPCode_ELB_5XX_Count
-      Namespace: AWS/ApplicationELB
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 5
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        Fn::If:
-        - CloudwatchAlarmsTopicExists
-        - Ref: CloudwatchAlarms
-        - Ref: AWS::NoValue
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
-        - Name: TargetGroup
-          Value:
-            Fn::Sub: ${TargetGroup.TargetGroupFullName}
-  TargetGroupRejectedConnectionCount:
-    Type: "AWS::CloudWatch::Alarm"
-    DependsOn:
-      - LoadBalancer
-    Properties:
-      AlarmDescription: alb rejected connection count check
-      MetricName: RejectedConnectionCount
-      Namespace: AWS/ApplicationELB
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 10
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        Fn::If:
-        - CloudwatchAlarmsTopicExists
-        - Ref: CloudwatchAlarms
-        - Ref: AWS::NoValue
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::Sub: ${LoadBalancer.LoadBalancerFullName}
-        - Name: TargetGroup
-          Value:
-            Fn::Sub: ${TargetGroup.TargetGroupFullName}
+
 Outputs:
   DnsRecord:
     Description: Load Balancer DNS Record
@@ -544,9 +580,9 @@ Outputs:
       Ref: HttpsListener
   TargetGroup:
     Description: Default Target Group Resource
-    Value: 
+    Value:
       Ref: TargetGroup
-  SecurityGroup: 
+  SecurityGroup:
     Description: Load Balancer Security Group
     Value:
       Ref: SecurityGroup

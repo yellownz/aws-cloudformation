@@ -7,6 +7,11 @@
         cf_stack_template_temp_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-stack.tmp.json"
         cf_stack_policy_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-policy.json"
         cf_stack_config_json: "{{ cf_build_folder }}/{{ cf_stack_name }}-config.json"
+
+    - name: debug yaml template
+      debug:
+        msg: "{{ cf_stack_template }} # {{ cf_stack_template_yaml }}"
+
     - name: generate YAML template
       template:
         src: "{{ cf_stack_template }}"

@@ -1,0 +1,287 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Stack
+
+Parameters:
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  DockerNetworkMode:
+    Type: String
+    Description: Docker networking mode - bridge or host
+    Default: host
+  CreateEcsTaskRunner:
+    Type: String
+    Description: Enable/disable creation of ECS Task Runner resources
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "true"
+      - "False"
+      - "false"
+  EcsTaskRunnerHandler:
+    Type: String
+    Description: ECS Task Runner Lambda function S3 object handler (name.method)
+    Default: ecs_tasks.handler
+  EcsTaskRunnerVersion:
+    Type: String
+    Description: ECS Task Runner Lambda function S3 object version. Set to NONE to disable creation of ECS Task Runner resources.
+    Default: latest
+  EcsTaskRunnerObject:
+    Type: String
+    Description: ECS Task Runner Lambda function S3 object handler (name.method)
+    Default: ecsTasks.zip
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  Name:
+    Type: String
+    Description: Optional name to define cluster
+    Default: Cluster
+
+Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  CreateEcsTaskRunnerCondition:
+    Fn::Or:
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "True"
+      - Fn::Equals:
+        - Ref: CreateEcsTaskRunner
+        - "true"
+  EcsTaskRunnerLatest:
+    Fn::Equals:
+    - Ref: EcsTaskRunnerVersion
+    - latest
+
+Resources:
+  DmesgLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/${Name}/var/log/dmesg
+      RetentionInDays:
+        Ref: LogRetention
+  DockerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/${Name}/var/log/docker
+      RetentionInDays:
+        Ref: LogRetention
+  MessagesLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/${Name}/var/log/messages
+      RetentionInDays:
+        Ref: LogRetention
+  EcsAgentLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/${Name}/var/log/ecs/ecs-agent
+      RetentionInDays:
+        Ref: LogRetention
+  EcsInitLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: ${AWS::StackName}/${Name}/var/log/ecs/ecs-init
+      RetentionInDays:
+        Ref: LogRetention
+  EcsTaskRunnerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: CreateEcsTaskRunnerCondition
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}/${Name}/lambda
+      RetentionInDays:
+        Ref: LogRetention
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName:
+        Fn::Sub: ${AWS::StackName}-${Name}
+  EcsTaskRunnerRole:
+    Type: AWS::IAM::Role
+    Condition: CreateEcsTaskRunnerCondition
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+              - ecs.amazonaws.com
+              - ec2.amazonaws.com
+              - ecs-tasks.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: ECSTasks
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: ECSTasks
+            Effect: Allow
+            Action:
+              - ecs:StartTask
+              - ecs:RunTask
+              - ecs:StopTask
+              - ecs:DescribeTasks
+              - ecs:ListTasks
+            Condition:
+              ArnEquals:
+                ecs:cluster:
+                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+            Resource: "*"
+          - Sid: ECSTaskDefinitions
+            Effect: Allow
+            Action:
+              - ecs:DescribeTaskDefinition
+            Resource: "*"
+          - Sid: ECSContainerInstances
+            Effect: Allow
+            Action:
+              - ecs:ListContainerInstances
+            Resource:
+              - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+          - Sid: InvokeSelf
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              Fn::Sub: arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-ecsTasks
+          - Sid: StackStatus
+            Effect: Allow
+            Action:
+              - cloudformation:DescribeStacks
+            Resource:
+              Fn::Sub: arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/${AWS::StackId}
+          - Sid: CreateLambdaLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              Fn::Sub: ${EcsTaskRunnerLogGroup.Arn}
+  EcsTaskRunner:
+    Type: AWS::Lambda::Function
+    Condition: CreateEcsTaskRunnerCondition
+    DependsOn:
+      - EcsTaskRunnerLogGroup
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ECS Task Runner
+      Handler:
+        Ref: EcsTaskRunnerHandler
+      MemorySize: 128
+      Runtime: python2.7
+      Timeout: 300
+      Role:
+        Fn::Sub: ${EcsTaskRunnerRole.Arn}
+      Code:
+        S3Bucket:
+          Fn::ImportValue: CfnLambdaBucket
+        S3Key:
+          Ref: EcsTaskRunnerObject
+        S3ObjectVersion:
+          Fn::If:
+            - EcsTaskRunnerLatest
+            - Ref: AWS::NoValue
+            - Ref: EcsTaskRunnerVersion
+
+  ClusterCPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ECS Cluster CPU Utilization
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            Ref: EcsCluster
+  ClusterMemoryUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription:
+        Fn::Sub: ${AWS::StackName} ECS Cluster Memory Utilization
+      MetricName: MemoryUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      OKActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      InsufficientDataActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            Ref: EcsCluster
+
+Outputs:
+  EcsCluster:
+    Description: ECS Cluster
+    Value:
+      Ref: EcsCluster
+    Export:
+      Name:
+        Fn::Sub: ${EcsCluster.ClusterName}
+  EcsTaskRunner:
+    Description: ECS Task Runner Function
+    Value:
+      Ref: EcsTaskRunner

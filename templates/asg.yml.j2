@@ -1,3 +1,4 @@
+---
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: Autoscaling Group Stack
@@ -29,7 +30,11 @@ Parameters:
     Default: NONE
   CustomSecurityGroup:
     Type: String
-    Description: Custom Security Group to attach to Autoscaling Group
+    Description: Custom Security Group Id (e.g. sg-xxx) to attach to Autoscaling Group
+    Default: NONE
+  CustomEcsClusterArn:
+    Type: String
+    Description: Custom ECS Cluster to attach to Autoscaling Group
     Default: NONE
   DesiredCount:
     Type: Number
@@ -67,11 +72,11 @@ Parameters:
     AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
   MinSize:
     Type: Number
-    Description: Minimum autoscaling group size 
+    Description: Minimum autoscaling group size
     Default: 0
   MaxSize:
     Type: Number
-    Description: Maximum autoscaling group size 
+    Description: Maximum autoscaling group size
     Default: 4
   NfsHostUrl:
     Type: String
@@ -114,8 +119,24 @@ Parameters:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC name
     Default: Default
+  ResourcePrefix:
+    Type: String
+    Description: |
+        Used for Stack::Transform when dealing with uninterpolated text; this is a
+        temporary solution until transform engine is updated to deal with UserData body
+    Default: ""
+
 
 Conditions:
+  CustomEcsClusterExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CustomEcsClusterArn
+        - NONE
+  DefaultEcsClusterExists:
+    Fn::Equals:
+      - Ref: CustomEcsClusterArn
+      - NONE
   CustomSecurityGroupCondition:
     Fn::Not:
       - Fn::Equals:
@@ -293,7 +314,10 @@ Resources:
                     AWS_DEFAULT_REGION:
                       Ref: AWS::Region
                     ECS_CLUSTER:
-                      Ref: EcsCluster
+                      Fn::If:
+                        - CustomEcsClusterExists
+                        - Ref: CustomEcsClusterArn
+                        - Ref: EcsCluster
                     DOCKER_NETWORK_MODE:
                       Ref: DockerNetworkMode
                     TIME_ZONE:
@@ -314,7 +338,10 @@ Resources:
                     AWS_DEFAULT_REGION:
                       Ref: AWS::Region
                     ECS_CLUSTER:
-                      Ref: EcsCluster
+                      Fn::If:
+                        - CustomEcsClusterExists
+                        - Ref: CustomEcsClusterArn
+                        - Ref: EcsCluster
                     DOCKER_NETWORK_MODE:
                       Ref: DockerNetworkMode
                     TIME_ZONE:
@@ -323,7 +350,7 @@ Resources:
                       Ref: ProxyUrl
                   cwd: /home/ec2-user/
     Properties:
-      ImageId: 
+      ImageId:
         Ref: ImageId
       InstanceType:
         Ref: InstanceType
@@ -356,26 +383,30 @@ Resources:
         Fn::Base64:
           Fn::If:
             - ProxyEnabledCondition
-            - Fn::Sub: |
-                #!/bin/bash
-                trap 'kill $(jobs -p)' EXIT
-                tail --retry -F /var/log/cfn-init.log >> /dev/console &
-                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
-                  --resource ${Name}LaunchConfiguration --region ${AWS::Region} \
+            -
+              Fn::Join: ["\n", [
+                "#!/bin/bash",
+                "trap 'kill $(jobs -p)' EXIT",
+                "tail --retry -F /var/log/cfn-init.log >> /dev/console &",
+                "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${ResourcePrefix}LaunchConfiguration --region ${AWS::Region} \
                   --http-proxy ${ProxyUrl} \
-                  --https-proxy ${ProxyUrl}
-                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
-                  --resource ${Name}AutoscalingGroup --region ${AWS::Region} \
+                  --https-proxy ${ProxyUrl}",
+                "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${ResourcePrefix}AutoscalingGroup --region ${AWS::Region} \
                   --http-proxy ${ProxyUrl} \
-                  --https-proxy ${ProxyUrl}
-            - Fn::Sub: |
-                #!/bin/bash
-                trap 'kill $(jobs -p)' EXIT
-                tail --retry -F /var/log/cfn-init.log >> /dev/console &
-                /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
-                  --resource ${Name}LaunchConfiguration --region ${AWS::Region}
-                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
-                  --resource ${Name}AutoscalingGroup --region ${AWS::Region}
+                  --https-proxy ${ProxyUrl}"
+              ]]
+            -
+              Fn::Join: ["\n", [
+                "#!/bin/bash",
+                "trap 'kill $(jobs -p)' EXIT",
+                "tail --retry -F /var/log/cfn-init.log >> /dev/console &",
+                "Fn::Sub": "/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} \
+                  --resource ${ResourcePrefix}LaunchConfiguration --region ${AWS::Region}",
+                "Fn::Sub": "/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
+                  --resource ${ResourcePrefix}AutoscalingGroup --region ${AWS::Region}"
+              ]]
   AutoscalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
@@ -420,13 +451,13 @@ Resources:
         Ref: DesiredCount
       Tags:
         - Key: Name
-          Value: 
+          Value:
             Fn::Sub: ${AWS::StackName}-${Name}-instance
           PropagateAtLaunch: "true"
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 
+      GroupDescription:
         Fn::Sub: ${AWS::StackName} ${Name} Security Group
       VpcId:
         Fn::ImportValue:
@@ -436,13 +467,13 @@ Resources:
           FromPort: -1
           ToPort: -1
           CidrIp:
-            Fn::ImportValue: 
+            Fn::ImportValue:
               Fn::Sub: ${VpcName}ManagementSubnetACidr
         - IpProtocol: icmp
           FromPort: -1
           ToPort: -1
           CidrIp:
-            Fn::ImportValue: 
+            Fn::ImportValue:
               Fn::Sub: ${VpcName}ManagementSubnetBCidr
         - IpProtocol: tcp
           FromPort: 22
@@ -501,11 +532,13 @@ Resources:
               CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: 
+          Value:
             Fn::Sub: ${AWS::StackName}-${Name}-sg
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -518,13 +551,16 @@ Resources:
         - PolicyName: ECSContainerInstancePolicy
           PolicyDocument:
             Version: "2012-10-17"
-            Statement: 
+            Statement:
             - Effect: Allow
-              Action: 
+              Action:
               - ecs:RegisterContainerInstance
               - ecs:DeregisterContainerInstance
-              Resource: 
-                Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+              Resource:
+                Fn::If:
+                  - CustomEcsClusterExists
+                  - Ref: CustomEcsClusterArn
+                  - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
             - Effect: Allow
               Action:
               - ecs:DiscoverPollEndpoint
@@ -563,6 +599,7 @@ Resources:
         - Ref: InstanceRole
   EcsCluster:
     Type: AWS::ECS::Cluster
+    Condition: DefaultEcsClusterExists
   CPUCreditBalance:
     Type: AWS::CloudWatch::Alarm
     Condition: T2InstanceType
@@ -602,7 +639,7 @@ Resources:
     DependsOn:
       - AutoscalingGroup
     Properties:
-      AlarmDescription: 
+      AlarmDescription:
         Fn::Sub: ${AWS::StackName} ${Name} CPU utilization check
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -700,7 +737,7 @@ Resources:
   #               Action:
   #                 - cloudformation:DescribeStackResource
   #               Effect: Allow
-  #               Resource: 
+  #               Resource:
   #                 Fn::Sub: "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*"
   #             - Sid: ListContainerInstances
   #               Action:
@@ -713,11 +750,11 @@ Resources:
   #                 - ecs:DescribeContainerInstances
   #                 - ecs:UpdateContainerInstancesState
   #               Effect: Allow
-  #               Resource: 
+  #               Resource:
   #                 Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*"
   #               Condition:
   #                 ArnEquals:
-  #                   ecs:cluster: 
+  #                   ecs:cluster:
   #                     Fn::Sub: "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}"
   #             - Sid: Publish
   #               Action:
@@ -730,12 +767,12 @@ Resources:
   #               Action:
   #               - logs:CreateLogStream
   #               - logs:PutLogEvents
-  #               Resource: 
+  #               Resource:
   #                 Fn::Sub: ${LifecycleHookFunctionLogGroup.Arn}
   # LifecycleHookTopic:
   #   Type: AWS::SNS::Topic
   #   Properties:
-  #     TopicName: 
+  #     TopicName:
   #       Fn::Sub: ${AWS::StackName}-${Name}-LifecycleHookTopic
   # LifecycleHookSubscription:
   #   Type: AWS::SNS::Subscription
@@ -777,7 +814,7 @@ Resources:
   #           - LifecycleHookLatest
   #           - Ref: AWS::NoValue
   #           - Ref: LifecycleHookVersion
-  #     Description: 
+  #     Description:
   #       Fn::Sub: "${AWS::StackName} ${Name} Autoscaling Lifecycle Hook"
   #     Environment:
   #       Variables:
@@ -829,7 +866,10 @@ Resources:
             Condition:
               ArnEquals:
                 ecs:cluster:
-                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+                  Fn::If:
+                    - CustomEcsClusterExists
+                    - Ref: CustomEcsClusterArn
+                    - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
             Resource: "*"
           - Sid: ECSTaskDefinitions
             Effect: Allow
@@ -841,7 +881,10 @@ Resources:
             Action:
               - ecs:ListContainerInstances
             Resource:
-              - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
+              Fn::If:
+                - CustomEcsClusterExists
+                - Ref: CustomEcsClusterArn
+                - Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
           - Sid: InvokeSelf
             Effect: Allow
             Action:
@@ -859,7 +902,7 @@ Resources:
             Action:
               - logs:CreateLogStream
               - logs:PutLogEvents
-            Resource: 
+            Resource:
               Fn::Sub: ${EcsTaskRunnerLogGroup.Arn}
   EcsTaskRunner:
     Type: "AWS::Lambda::Function"
@@ -875,7 +918,7 @@ Resources:
       Timeout: 300
       Role:
         Fn::Sub: "${EcsTaskRunnerRole.Arn}"
-      FunctionName: 
+      FunctionName:
         Fn::Sub: "${AWS::StackName}-${Name}-ecsTasks"
       Code:
         S3Bucket:

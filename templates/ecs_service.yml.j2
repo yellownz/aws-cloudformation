@@ -1,0 +1,211 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Defines ECS cluster service and associated tasks
+
+Parameters:
+  VpcId:
+    Type: String
+    Default: DefaultVpcId
+  ClusterArn:
+    Type: String
+  LogsRetention:
+    Type: Number
+    Description: Log retention time in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  DesiredCount:
+    Type: Number
+    Description: Application AutoScaling Group Desired Count
+    Default: 3
+  DockerNetworkMode:
+    Type: String
+    Description: Docker network mode
+    Default: host
+    AllowedValues:
+      - bridge
+      - host
+      - none
+  DockerMemoryReservation:
+    Type: Number
+    Description: Docker memory in Mb
+    Default: 500
+  DockerImage:
+    Type: String
+    Description: Docker image URI
+  DockerTag:
+    Type: String
+    Description: Docker image tag
+    Default: latest
+  Port:
+    Type: Number
+    Description: Main ingress port
+    Default: NONE
+  TargetGroupArn:
+    Type: String
+    Description: Target group for ECS service
+    Default: NONE
+  Name:
+    Type: String
+    Description: Optional name to define service
+    Default: Service
+  DockerMinumumHealthyPercent:
+    Type: Number
+    Description: Minimum percent healthy containers during deploy
+    Default: 50
+  DockerMaximumPercent:
+    Type: Number
+    Description: Maximum percent of containers to deploy during deploy
+    Default: 200
+
+Conditions:
+  LoadBalanced:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: Port
+        - NONE
+
+Resources:
+
+  {% if Config.DependsOn|default(False) %}
+  DependencyLink:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    DependsOn:
+    {% for node in Config.DependsOn %}
+      - {{ node }}DependencyAnchor
+    {% endfor %}
+  {% endif %}
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: "{{ logs_deletion_policy|default('Delete') }}"
+    Properties:
+      LogGroupName:
+        Fn::Sub: "${AWS::StackName}/${Name}/ecs/task"
+      RetentionInDays:
+        Ref: LogsRetention
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - ecs.amazonaws.com
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ECSContainerTaskRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource:
+                  Fn::ImportValue: CfnMasterKeyArn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn:
+      - Role
+    Properties:
+      TaskRoleArn:
+        Fn::GetAtt:
+          - Role
+          - Arn
+      NetworkMode: host
+      {% if Config.Service.Volumes|default(False) %}
+      Volumes:
+        {% for volume in Config.Service.Volumes %}
+        - Name: "{{ volume.Name }}"
+          {% if volume.Host|default(False) %}
+          Host:
+            SourcePath: "{{ volume.Host }}"
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      ContainerDefinitions:
+      - Name:
+          Ref: AWS::StackName
+        Image:
+          Fn::Sub: ${DockerImage}:${DockerTag}
+        MemoryReservation:
+          Ref: DockerMemoryReservation
+        Memory:
+          Ref: DockerMemoryReservation
+        LogConfiguration:
+          LogDriver: awslogs
+          Options:
+            awslogs-group:
+              Ref: LogGroup
+            awslogs-region:
+              Ref: AWS::Region
+            awslogs-stream-prefix: docker
+        PortMappings:
+          {% for mapping in Config.Service.Ports|default([]) %}
+          - ContainerPort: "{{ mapping.ContainerPort }}"
+            {% if mapping.HostPort|default(False) %}
+            HostPort: "{{ mapping.HostPort }}"
+            {% endif %}
+            Protocol: "{{ mapping.Protocol|default('tcp') }}"
+          {% endfor %}
+        Environment:
+          - Name: no_proxy
+            Value: "169.254.169.254,169.254.170.2,127.0.0.1,localhost"
+          - Name: CLEAR_PROXY
+            Value: "true"
+          {% for key, value in (Config.Service.Environment|default({})).iteritems() %}
+          - Name: "{{ key }}"
+            Value:
+              {{
+                value|to_nice_yaml(indent=2)|indent(14, False) if value is mapping
+                else value
+              }}
+          {% endfor %}
+        {% if Config.Service.MountPoints|default(False) %}
+        MountPoints:
+          {% for mount in Config.Service.MountPoints %}
+          - SourceVolume: "{{ mount.Source }}"
+            ContainerPath: "{{ mount.Path }}"
+          {% endfor %}
+        {% endif %}
+
+  Service:
+    Type: AWS::ECS::Service
+    {% if Config.DependsOn %}
+    DependsOn:
+      - DependencyLink
+    {% endif %}
+    Properties:
+      Cluster:
+        Ref: ClusterArn
+      DesiredCount:
+        Ref: DesiredCount
+      TaskDefinition:
+        Ref: TaskDefinition
+      LoadBalancers:
+        Fn::If:
+          - LoadBalanced
+          - - ContainerName:
+                Ref: AWS::StackName
+              ContainerPort:
+                Ref: Port
+              TargetGroupArn:
+                Ref: TargetGroupArn
+          - - Ref: AWS::NoValue
+      Role:
+        Ref: Role
+      DeploymentConfiguration:
+        MinimumHealthyPercent:
+          Ref: DockerMinumumHealthyPercent
+        MaximumPercent:
+          Ref: DockerMaximumPercent

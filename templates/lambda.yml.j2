@@ -1,0 +1,273 @@
+#jinja2: lstrip_blocks: True
+---
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: ECS Stack
+
+Parameters:
+  AlwaysRun:
+    Type: String
+    Description: Determine if lambda executes on all stack runs
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "False"
+  CloudwatchAlarms:
+    Type: String
+    Description: ARN of SNS topic for CloudWatch Alarms
+    Default: NONE
+  Handler:
+    Type: String
+    Description: Lambda handler (name.method)
+  Action:
+    Type: String
+    Description: Explicit action to perform against handler
+    Default: NONE
+  Version:
+    Type: String
+    Description: Lambda object version
+    Default: latest
+  Object:
+    Type: String
+    Description: Lambda function S3 object *.zip
+  LogRetention:
+    Type: Number
+    Description: Log retention in days
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+  MemorySize:
+    Type: Number
+    Description: Alloted memory for lambda process
+    Default: 128
+  Runtime:
+    Type: String
+    Description: Lambda Runtime
+    Default: python2.7
+  Timeout:
+    Type: Number
+    Description: Lambda run timeout
+    Default: 300
+  CustomPolicyActions:
+    Type: CommaDelimitedList
+    Description: Custom policy arn to attach to lambda role
+    Default: logs:getLogEvents
+  CustomPolicyResources:
+    Type: CommaDelimitedList
+    Description: A list of resources of which provide access
+    Default: "*"
+
+Conditions:
+  CloudwatchAlarmsTopicExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: CloudwatchAlarms
+        - NONE
+  LambdaActionExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: Action
+        - NONE
+  LatestVersion:
+    Fn::Equals:
+      - Ref: Version
+      - latest
+  AlwaysRunCondition:
+    Fn::Equals:
+      - Ref: AlwaysRun
+      - "True"
+
+
+Resources:
+  Caller:
+    Type: Custom::Caller
+    Properties:
+      ServiceToken:
+        Fn::Sub: ${Runner.Arn}
+      __CacheBuster__:
+        Fn::If:
+          - AlwaysRunCondition
+          - {{ None|timestamp }}
+          - Ref: AWS::NoValue
+      Action:
+        Fn::If:
+          - LambdaActionExists
+          - Ref: Action
+          - Ref: AWS::NoValue
+      {% for key, value in (Config.Lambda.Properties|default({})).iteritems() %}
+      {{ key }}:
+          {{
+            value|to_nice_yaml(indent=2)|indent(10, False) if value is mapping
+            else value
+          }}
+      {% endfor %}
+
+  Runner:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description:
+        Fn::Sub: ${AWS::StackName} ${Handler} ${Action}
+      Handler:
+        Ref: Handler
+      MemorySize:
+        Ref: MemorySize
+      Runtime:
+        Ref: Runtime
+      Timeout:
+        Ref: Timeout
+      Role:
+        Ref: Role
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-${Action}
+      Code:
+        S3Bucket:
+          Fn::ImportValue: CfnLambdaBucket
+        S3Key:
+          Ref: Object
+        S3ObjectVersion:
+          Fn::If:
+            - LatestVersion
+            - Ref: AWS::NoValue
+            - Ref: Version
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Action}
+      RetentionInDays:
+        Ref: LogRetention
+
+  Role:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - LogGroup
+    Properties:
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+              - ecs.amazonaws.com
+              - ec2.amazonaws.com
+              - ecs-tasks.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Policies:
+      - PolicyName: Lambda
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Sid: Self
+            Effect: Allow
+            Action:
+              - lambda:*
+            Resource:
+              Ref: Runner
+          - Sid: StackStatus
+            Effect: Allow
+            Action:
+              - cloudformation:DescribeStacks
+            Resource:
+              Ref: AWS::StackId
+          - Sid: CreateLambdaLogs
+            Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              Ref: LogGroup
+          - Sid: CustomPolicyStatement
+            Effect: Allow
+            Action:
+              Ref: CustomPolicyActions
+            Resource:
+              Ref: CustomPolicyResources
+
+  LambdaErrors:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CloudwatchAlarmsTopicExists
+    Properties:
+      AlarmDescription: lambda error count
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: Handler
+          Value:
+            Ref: Handler
+  LambdaErrorsDeadLetter:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CloudwatchAlarmsTopicExists
+    Properties:
+      AlarmDescription: lambda failed write to error queue
+      MetricName: Dead Letter Error
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: Handler
+          Value:
+            Ref: Handler
+  LambdaDuration:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CloudwatchAlarmsTopicExists
+    Properties:
+      AlarmDescription: lambda duration exceeds threshold
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold:
+        Ref: Timeout
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: Handler
+          Value:
+            Ref: Handler
+  LambdaThrottles:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CloudwatchAlarmsTopicExists
+    Properties:
+      AlarmDescription: lambda count exceeds invocation rates
+      MetricName: Dead Letter Error
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 2
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        Fn::If:
+        - CloudwatchAlarmsTopicExists
+        - Ref: CloudwatchAlarms
+        - Ref: AWS::NoValue
+      Dimensions:
+        - Name: Handler
+          Value:
+            Ref: Handler

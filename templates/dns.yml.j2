@@ -51,7 +51,10 @@ Resources:
         TTL: {{ record.TTL|default(300) }}
         ResourceRecords:
           {% for value in record.Values|default([]) %}
-          - {{ value }}
+          - {{
+                value|to_nice_yaml(indent=2)|indent(10, False) if value is mapping
+                else value
+            }}
           {% endfor %}
         {% endif %}
       {% endfor%}

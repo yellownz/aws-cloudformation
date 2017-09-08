@@ -19,9 +19,11 @@ Parameters:
   DnsHostname:
     Type: String
     Description: Hostname portion of FQDN of the database instance
+    Default: ""
   DnsDomain:
     Type: String
     Description: Domain portion of FQDN of the database instance
+    Default: ""
   ParameterGroup:
     Type: String
     Description: ARN of database parameter group
@@ -33,12 +35,15 @@ Parameters:
       - mysql
       - postgres
       - aurora
+    Default: postgres
   EngineVersion:
     Type: String
     Description: Database version
+    Default: 9.6
   IngressSecurityGroup:
     Type: String
     Description: Ingress security group that will be granted access to database
+    Default: ""
   InstanceType:
     Type: String
     Description: Database instance class
@@ -73,7 +78,7 @@ Parameters:
     Type: String
     Description: Name of rds instance
     Default: ApplicationDatabase
-  Snapshot: 
+  Snapshot:
     Type: String
     Description: ARN of database snapshot to create instance from
     Default: ""
@@ -124,20 +129,31 @@ Conditions:
       - Fn::Equals:
         - Ref: CloudwatchAlarms
         - ""
+  DnsExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: DnsDomain
+        - ""
+  IngressSecurityGroupExists:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: IngressSecurityGroup
+        - ""
 
 Resources:
   DnsRecord:
     Type: AWS::Route53::RecordSet
+    Condition: DnsExists
     Properties:
-      Name: 
+      Name:
         Fn::Sub: ${DnsHostname}.${DnsDomain}
       TTL: 300
-      HostedZoneName: 
+      HostedZoneName:
         Fn::Sub: ${DnsDomain}.
       Type: CNAME
       Comment:
         Fn::Sub: ${AWS::StackName} ${Name} DNS Record
-      ResourceRecords: 
+      ResourceRecords:
         - Fn::Sub: ${DbInstance.Endpoint.Address}
   DbInstance:
     Type: AWS::RDS::DBInstance
@@ -150,6 +166,8 @@ Resources:
       PreferredBackupWindow: 12:00-14:00
       PreferredMaintenanceWindow: sun:14:30-sun:16:00
       StorageType: gp2
+      DBName:
+        Ref: Name
       DBInstanceClass:
         Ref: InstanceType
       DBSnapshotIdentifier:
@@ -168,7 +186,7 @@ Resources:
         - Ref: SecurityGroup
       MultiAZ:
         Ref: MultiAz
-      AvailabilityZone: 
+      AvailabilityZone:
         Fn::If:
           - MultiAzEnabled
           - Ref: AWS::NoValue
@@ -180,7 +198,7 @@ Resources:
         - Ref: AWS::NoValue
       Tags:
         - Key: Name
-          Value: 
+          Value:
             Fn::Sub: ${AWS::StackName}-${Name}-rds
         - Key: yellow:tech:app-role
           Value: database
@@ -201,7 +219,7 @@ Resources:
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 
+      GroupDescription:
         Fn::Sub: ${AWS::StackName} ${Name} Security Group
       VpcId:
         Fn::ImportValue:
@@ -224,7 +242,7 @@ Resources:
             - Ref: Engine
             - port
           CidrIp:
-            Fn::ImportValue: 
+            Fn::ImportValue:
               Fn::Sub: ${VpcName}ManagementSubnetACidr
         - IpProtocol: tcp
           FromPort:
@@ -238,7 +256,7 @@ Resources:
             - Ref: Engine
             - port
           CidrIp:
-            Fn::ImportValue: 
+            Fn::ImportValue:
               Fn::Sub: ${VpcName}ManagementSubnetBCidr
         - IpProtocol: icmp
           FromPort: -1
@@ -254,10 +272,11 @@ Resources:
               Fn::Sub: ${VpcName}ManagementSubnetBCidr
       Tags:
           - Key: Name
-            Value: 
+            Value:
               Fn::Sub: ${AWS::StackName}-${Name}-sg
   ToDatabaseIngress:
     Type: AWS::EC2::SecurityGroupIngress
+    Condition: IngressSecurityGroupExists
     Properties:
       IpProtocol: tcp
       FromPort:
@@ -276,6 +295,7 @@ Resources:
         Ref: IngressSecurityGroup
   ToDatabaseEgress:
     Type: AWS::EC2::SecurityGroupEgress
+    Condition: IngressSecurityGroupExists
     Properties:
       IpProtocol: tcp
       FromPort:
@@ -298,7 +318,7 @@ Resources:
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: 
+      AlarmDescription:
         Fn::Sub: ${AWS::StackName} ${Name} low CPU credit balance
       MetricName: CPUCreditBalance
       Namespace: AWS/RDS
@@ -331,7 +351,7 @@ Resources:
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: 
+      AlarmDescription:
         Fn::Sub: ${AWS::StackName} ${Name} low CPU utilization check
       MetricName: CPUUtilization
       Namespace: AWS/RDS
@@ -364,7 +384,7 @@ Resources:
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: 
+      AlarmDescription:
         Fn::Sub: ${AWS::StackName} ${Name} free storage space check
       MetricName: FreeStorageSpace
       Namespace: AWS/RDS
@@ -397,7 +417,7 @@ Resources:
     DependsOn:
       - DbInstance
     Properties:
-      AlarmDescription: 
+      AlarmDescription:
         Fn::Sub: ${AWS::StackName} ${Name} freeable memory check
       MetricName: FreeableMemory
       Namespace: AWS/RDS
@@ -546,14 +566,14 @@ Mappings:
       port: 3306
     postgres:
       port: 5432
-  
+
 Outputs:
   DnsRecord:
     Description: RDS instance DNS Record
     Value:
       Ref: DnsRecord
   SecurityGroup:
-    Description: RDS instance security group ID 
+    Description: RDS instance security group ID
     Value:
       Ref: SecurityGroup
   EndPoint:
