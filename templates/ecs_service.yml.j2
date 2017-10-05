@@ -28,8 +28,12 @@ Parameters:
       - none
   DockerMemoryReservation:
     Type: Number
-    Description: Docker memory in Mb
-    Default: 500
+    Description: Docker memory hard-limit in Mb
+    Default: 512
+  DockerMemory:
+    Type: Number
+    Description: Docker memory soft-limit in Mb
+    Default: 1024
   DockerImage:
     Type: String
     Description: Docker image URI
@@ -141,7 +145,7 @@ Resources:
         MemoryReservation:
           Ref: DockerMemoryReservation
         Memory:
-          Ref: DockerMemoryReservation
+          Ref: DockerMemory
         LogConfiguration:
           LogDriver: awslogs
           Options:
