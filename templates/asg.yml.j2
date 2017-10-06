@@ -416,6 +416,8 @@ Resources:
       - EcsInitLogGroup
       - EcsAgentLogGroup
     UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: True
       AutoScalingRollingUpdate:
         MinInstancesInService:
           Ref: DesiredCount
