@@ -142,10 +142,8 @@ Resources:
           Ref: AWS::StackName
         Image:
           Fn::Sub: ${DockerImage}:${DockerTag}
-        MemoryReservation:
-          Ref: DockerMemoryReservation
-        Memory:
-          Ref: DockerMemory
+        MemoryReservation: 512
+        Memory: 1024
         LogConfiguration:
           LogDriver: awslogs
           Options:
