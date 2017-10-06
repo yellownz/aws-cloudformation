@@ -417,8 +417,10 @@ Resources:
       - EcsAgentLogGroup
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: True
+        WillReplace: "true"
       AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 2
         MinInstancesInService:
           Ref: DesiredCount
         MinSuccessfulInstancesPercent: 100
