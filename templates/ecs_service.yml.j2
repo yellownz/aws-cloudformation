@@ -209,7 +209,6 @@ Resources:
       Role:
         Ref: Role
       DeploymentConfiguration:
-        MinimumHealthyPercent:
-          Ref: DockerMinimumHealthyPercent
+        MinimumHealthyPercent: 0
         MaximumPercent:
           Ref: DockerMaximumPercent

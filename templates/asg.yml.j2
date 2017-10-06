@@ -417,14 +417,14 @@ Resources:
       - EcsAgentLogGroup
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: "true"
+        WillReplace: true
       AutoScalingRollingUpdate:
         MinInstancesInService: 1
         MaxBatchSize: 2
         MinInstancesInService:
           Ref: DesiredCount
         MinSuccessfulInstancesPercent: 100
-        WaitOnResourceSignals: "true"
+        WaitOnResourceSignals: true
         PauseTime: PT15M
     CreationPolicy:
       ResourceSignal:
@@ -447,10 +447,8 @@ Resources:
               Fn::Sub: ${VpcName}${Subnets}SubnetB
       LaunchConfigurationName:
         Ref: LaunchConfiguration
-      MinSize:
-        Ref: MinSize
-      MaxSize:
-        Ref: MaxSize
+      MinSize: 1
+      MaxSize: 2
       DesiredCapacity:
         Ref: DesiredCount
       Tags:
