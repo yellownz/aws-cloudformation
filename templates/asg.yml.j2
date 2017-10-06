@@ -417,14 +417,14 @@ Resources:
       - EcsAgentLogGroup
     UpdatePolicy:
       AutoScalingReplacingUpdate:
-        WillReplace: true
+        WillReplace: "true"
       AutoScalingRollingUpdate:
         MinInstancesInService: 1
-        MaxBatchSize: 2
+        MaxBatchSize: 10
         MinInstancesInService:
           Ref: DesiredCount
         MinSuccessfulInstancesPercent: 100
-        WaitOnResourceSignals: true
+        WaitOnResourceSignals: "false"
         PauseTime: PT15M
     CreationPolicy:
       ResourceSignal:
