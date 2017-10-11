@@ -268,6 +268,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.4.0
+
+- **BREAKING CHANGE** : Compatibility fixes for Ansible 2.4.x
+
 ### Version 0.9.5
 
 - **ENHANCEMENT** : Include stack tags with generated `config.json` files

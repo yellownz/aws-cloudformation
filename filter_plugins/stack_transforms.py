@@ -1,5 +1,5 @@
 from jinja2 import Template,FileSystemLoader,Environment,TemplateNotFound
-from ansible.plugins import filter_loader
+from ansible.plugins.loader import filter_loader
 from ansible.errors import AnsibleError
 import yaml
 import os
