@@ -112,6 +112,10 @@ Parameters:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC
     Default: Default
+  TargetGroupHealthCheckStatusCode:
+    Type: String
+    Description: Status code(s) permitted under healthcheck
+    Default: "200"
 
 Conditions:
   CloudwatchAlarmsTopicExists:
@@ -333,6 +337,9 @@ Resources:
         Ref: TargetGroupPort
       HealthCheckPath:
         Ref: TargetGroupHealthCheck
+      Matcher:
+        HttpCode:
+          Ref: TargetGroupHealthCheckStatusCode
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value:
