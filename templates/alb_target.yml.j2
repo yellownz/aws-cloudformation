@@ -33,6 +33,10 @@ Parameters:
     Type: String
     Description: Health check path of default target group
     Default: /
+  TargetGroupHealthCheckStatusCode:
+    Type: String
+    Description: Status code(s) permitted under healthcheck
+    Default: "200"
   TargetSecurityGroup:
     Type: String
     Description: Default target security group
@@ -94,6 +98,9 @@ Resources:
         Ref: TargetGroupHealthCheck
       HealthCheckPort:
         Ref: TargetGroupPort
+      Matcher:
+        HttpCode:
+          Ref: TargetGroupHealthCheckStatusCode
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value:
