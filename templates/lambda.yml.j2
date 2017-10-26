@@ -115,7 +115,9 @@ Resources:
       Timeout:
         Ref: Timeout
       Role:
-        Ref: Role
+        Fn::GetAtt:
+          - Role
+          - Arn
       FunctionName:
         Fn::Sub: ${AWS::StackName}-${Action}
       Code:
@@ -165,8 +167,7 @@ Resources:
             Effect: Allow
             Action:
               - lambda:*
-            Resource:
-              Ref: Runner
+            Resource: '*'
           - Sid: StackStatus
             Effect: Allow
             Action:
@@ -176,9 +177,13 @@ Resources:
           - Sid: CreateLambdaLogs
             Effect: Allow
             Action:
-              - logs:*
+              - logs:CreateLogStream
+              - logs:DescribeLogStreams
+              - logs:PutLogEvents
             Resource:
-              Ref: LogGroup
+              Fn::GetAtt:
+                - LogGroup
+                - Arn
           - Sid: CustomPolicyStatement
             Effect: Allow
             Action:
