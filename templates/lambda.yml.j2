@@ -168,6 +168,17 @@ Resources:
             Action:
               - lambda:*
             Resource: '*'
+          - Sid: "EcsTasks"
+            Effect: "Allow"
+            Action:
+              - ecs:DescribeTasks
+              - ecs:ListTasks
+              - ecs:RunTask
+              - ecs:StartTask
+              - ecs:StopTask
+              - ecs:DescribeContainerInstances
+              - ecs:ListContainerInstances
+            Resource: '*'
           - Sid: StackStatus
             Effect: Allow
             Action:
