@@ -279,10 +279,10 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 0.9.3
 
 - **NEW FEATURE** : Added generic [cloudfront template](`https://github.com/Casecommons/aws-cloudformation/pull/2`)
-- - **NEW FEATURE** : Added generic [s3 template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
-- - **ENHANCEMENT** : Updated jinja indentation on [ecr template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
-- - **NEW FEATURE** : Added generic [dns template](`https://github.com/Casecommons/aws-cloudformation/pull/7`)
-- - **NEW FEATURE** : Added generic CA [certificate template](`https://github.com/Casecommons/aws-cloudformation/pull/9`)
+- **NEW FEATURE** : Added generic [s3 template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
+- **ENHANCEMENT** : Updated jinja indentation on [ecr template](`https://github.com/Casecommons/aws-cloudformation/pull/4`)
+- **NEW FEATURE** : Added generic [dns template](`https://github.com/Casecommons/aws-cloudformation/pull/7`)
+- **NEW FEATURE** : Added generic CA [certificate template](`https://github.com/Casecommons/aws-cloudformation/pull/9`)
 
 ### Version 0.9.2
 
