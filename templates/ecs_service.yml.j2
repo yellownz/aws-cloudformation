@@ -207,7 +207,11 @@ Resources:
                 Ref: TargetGroupArn
           - - Ref: AWS::NoValue
       Role:
-        Ref: Role
+        Fn::If:
+          - LoadBalanced
+          - Ref: Role
+          - Ref: AWS::NoValue
+
       DeploymentConfiguration:
         MinimumHealthyPercent: 0
         MaximumPercent: 200
