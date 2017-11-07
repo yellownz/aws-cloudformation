@@ -152,6 +152,7 @@ Resources:
             awslogs-region:
               Ref: AWS::Region
             awslogs-stream-prefix: docker
+        {% if Config.Service.Ports|default(False) %}
         PortMappings:
           {% for mapping in Config.Service.Ports|default([]) %}
           - ContainerPort: "{{ mapping.ContainerPort }}"
@@ -160,6 +161,7 @@ Resources:
             {% endif %}
             Protocol: "{{ mapping.Protocol|default('tcp') }}"
           {% endfor %}
+        {% endif %}
         Environment:
           - Name: no_proxy
             Value: "169.254.169.254,169.254.170.2,127.0.0.1,localhost"
