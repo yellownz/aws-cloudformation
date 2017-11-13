@@ -108,6 +108,7 @@ Parameters:
   TargetSecurityGroup:
     Type: String
     Description: Default target security group
+    Default: NONE
   VpcName:
     Type: String
     Description: CloudFormation export prefix that defines the target VPC
@@ -183,6 +184,11 @@ Conditions:
       - Fn::Equals:
         - Ref: TargetGroupPort
         - 0
+  TargetSecurityGroupEnabled:
+    Fn::Not:
+      - Fn::Equals:
+        - Ref: TargetSecurityGroup
+        - NONE
 
 Resources:
   DnsRecord:
