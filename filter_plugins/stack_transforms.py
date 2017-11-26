@@ -9,6 +9,7 @@ import logging
 FORMAT = "[stack_transform]: %(message)s"
 PROPERTY_TRANSFORM = 'Property::Transform'
 STACK_TRANSFORM = 'Stack::Transform'
+CHILD_STACK = 'AWS::CloudFormation::Stack'
 
 class FilterModule(object):
   ''' Executes custom property transforms defined in a CloudFormation stack '''
@@ -178,8 +179,9 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
       'output': render_template(os.path.basename(file), os.path.dirname(file), resource_value, filters) 
     }
     for resource_key, resource_value in data['Resources'].iteritems() 
-    if resource_value.get('Type') == STACK_TRANSFORM
-    for file in [lookup_template(resource_value['Template'], template_paths)]
+    if resource_value.get('Type') == CHILD_STACK 
+    and resource_value.get('Metadata',{}).get(STACK_TRANSFORM,{}).get('Strategy','merge').lower() == 'merge'
+    for file in [lookup_template(resource_value['Metadata'][STACK_TRANSFORM]['Template'], template_paths)]
   ]
 
   # Scan input parameters for each transform, calculate renamed parameter,
@@ -190,10 +192,10 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     transform_parameters = transform['output'].get('Parameters', {})
     logging.debug("%s: Renaming input references in main stack", name)
     for key in transform['output'].get('Outputs', {}).keys():
-      logging.debug("--> Renaming %s.%s to %s", name, key, name+key)
-      search_and_replace(data,'%s.%s' % (name, key), name+key)
-      logging.debug("--> Replacing {'Fn::GetAtt': ['%s','%s']} with %s", name, key, {'Ref': name+key})
-      search_and_replace(data, {'Fn::GetAtt': [name,key]}, {'Ref': name+key})
+      logging.debug("--> Renaming %s.Outputs.%s to %s", name, key, name+key)
+      search_and_replace(data,'%s.Outputs.%s' % (name, key), name+key)
+      logging.debug("--> Replacing {'Fn::GetAtt': ['%s','Outputs.%s']} with %s", name, key, {'Ref': name+key})
+      search_and_replace(data, {'Fn::GetAtt': [name,'Outputs.'+key]}, {'Ref': name+key})
 
   # Process each transform template, renaming template resources,
   # and merging template resources into main stack.
