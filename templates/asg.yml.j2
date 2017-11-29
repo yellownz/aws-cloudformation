@@ -681,13 +681,13 @@ Resources:
                 Action:
                   - autoscaling:CompleteLifecycleAction
                 Resource:
-                  Fn::Sub: arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${ApplicationAutoscaling}
+                  Fn::Sub: arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AutoscalingGroup}
               - Sid: ListContainerInstances
                 Effect: Allow
                 Action:
                   - ecs:ListContainerInstances
                 Resource:
-                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}
+                  Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
               - Sid: ManageContainerInstances
                 Effect: Allow
                 Action:
@@ -697,7 +697,7 @@ Resources:
                 Condition:
                   ArnEquals:
                     ecs:cluster:
-                      Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ApplicationCluster}
+                      Fn::Sub: arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsCluster}
               - Sid: ManageLambdaLogs
                 Effect: Allow
                 Action:
@@ -727,7 +727,7 @@ Resources:
       Environment:
         Variables:
           ECS_CLUSTER:
-            Ref: ApplicationCluster
+            Ref: EcsCluster
   LifecycleHookFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -766,7 +766,7 @@ Resources:
       RoleARN:
         Fn::Sub: ${LifecycleHookRole.Arn}
       AutoScalingGroupName:
-        Ref: ApplicationAutoscaling
+        Ref: AutoscalingGroup
       DefaultResult: CONTINUE
       HeartbeatTimeout: 900
       LifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
