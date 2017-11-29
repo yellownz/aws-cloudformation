@@ -49,7 +49,7 @@ Resources:
         Fn::Sub: ${AWS::StackName}-cfnKmsDecrypt
       Code:
         S3Bucket:
-          Fn::Sub: ${AWS::AccountId}-cfn-lambda
+          Fn::ImportValue: CfnLambdaBucket
         S3Key: cfnKmsDecrypt.zip
 
   DecryptRole:
