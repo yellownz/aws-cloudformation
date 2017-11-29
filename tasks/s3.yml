@@ -23,7 +23,7 @@
       bucket: "{{ cf_s3_bucket }}"
       object: "{{ cf_stack_name }}/{{ current_timestamp }}/stack.json"
       src: "{{ cf_stack_template_json }}"
-      region: "{{ Sts.Region }}"
+      region: global
     changed_when: false
     register: cf_s3_result
   - name: set S3 url fact
