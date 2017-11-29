@@ -203,7 +203,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
   for transform in transforms:
     name = transform['name']
     resource = transform['resource']
-    resource_properties = resource['Properties']
+    resource_properties = resource['Properties']['Parameters']
     output = transform['output']
     output_parameters = output.get('Parameters', {})
 
