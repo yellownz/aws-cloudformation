@@ -9,6 +9,7 @@ import logging
 FORMAT = "[stack_transform]: %(message)s"
 PROPERTY_TRANSFORM = 'Property::Transform'
 STACK_TRANSFORM = 'Stack::Transform'
+DEPLOYMENT_STRATEGY = 'DeploymentStrategy'
 CHILD_STACK = 'AWS::CloudFormation::Stack'
 
 class FilterModule(object):
@@ -180,8 +181,8 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
     }
     for resource_key, resource_value in data['Resources'].iteritems() 
     if resource_value.get('Type') == CHILD_STACK 
-    and resource_value.get('Metadata',{}).get(STACK_TRANSFORM,{}).get('Strategy','merge').lower() == 'merge'
-    for file in [lookup_template(resource_value['Metadata'][STACK_TRANSFORM]['Template'], template_paths)]
+    and resource_value.get('Metadata',{}).get(DEPLOYMENT_STRATEGY,'child').lower() == 'merge'
+    for file in [lookup_template(resource_value['Properties']['TemplateURL'], template_paths)]
   ]
 
   # Scan input parameters for each transform, calculate renamed parameter,
