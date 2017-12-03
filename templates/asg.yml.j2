@@ -513,11 +513,6 @@ Resources:
               - ecr:GetDownloadUrlForLayer
               - ecr:GetAuthorizationToken
               Resource: "*"
-            - Effect: Allow
-              Action:
-              - kms:Decrypt
-              Resource:
-                Fn::ImportValue: CfnMasterKeyArn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: "2012-10-17"
