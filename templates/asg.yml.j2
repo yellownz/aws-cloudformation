@@ -713,9 +713,9 @@ Resources:
       Role:
         Fn::Sub: ${LifecycleFunctionRole.Arn}
       FunctionName:
-        Fn::Sub: ${AWS::StackName}-lifecycleHooks
+        Fn::Sub: ${AWS::StackName}-${Name}-lifecycleHooks
       Description:
-        Fn::Sub: ${AWS::StackName} Autoscaling Lifecycle Hook
+        Fn::Sub: ${AWS::StackName} ${Name} Autoscaling Lifecycle Hook
       Code:
         S3Bucket:
           Fn::ImportValue: CfnLambdaBucket
@@ -733,7 +733,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       LogGroupName:
-        Fn::Sub: /aws/lambda/${AWS::StackName}-lifecycleHooks
+        Fn::Sub: /aws/lambda/${AWS::StackName}-${Name}-lifecycleHooks
       RetentionInDays: 7
   LifecycleHookTopic:
     Type: AWS::SNS::Topic
