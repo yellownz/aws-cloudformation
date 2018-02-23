@@ -6,12 +6,10 @@ This is an Ansible role for generating CloudFormation templates and deploying Cl
 
 - Python 2.7
 - PIP package manager (**easy_install pip**)
-- Ansible 2.2 or greater (**pip install ansible**)
-- Boto (**pip install boto**)
+- Ansible 2.4 or greater (**pip install ansible**)
 - Boto3 (**pip install boto3**)
 - Netaddr (**pip install netaddr**)
 - AWS CLI (**pip install awscli**) installed and configured
-- [jq](https://stedolan.github.io/jq/)
 
 ## Setup
 
@@ -88,6 +86,7 @@ The following variables are used to configure this role:
 - `Stack.Policy` (optional) - defines the stack policy in a YAML or JSON format.
 - `Stack.Bucket` (optional) - defines the S3 bucket where the CloudFormation template will be uploaded.  This defaults to `<account-id>-cfn-templates` if not specified.
 - `Stack.Upload` (optional) - uploads the generated CloudFormation template to an S3 bucket defined by the `Stack.Bucket` variable.  Defaults to `false`.
+- `Stack.Role` (optional) - specifies a [CloudFormation service role](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-iam-servicerole.html)
 
 Invoking this role will generate a folder called `build` in the current working directory, along with a timestamped folder of the current date (e.g. `./build/20160705154440/`).  Inside this folder the following files are created:
 
@@ -279,6 +278,9 @@ The following is an example of a playbook configured to use this role.  Note the
 
 - **BREAKING CHANGE** : Compatibility fixes for Ansible 2.4.x
 - **ENHANCEMENT** : Refactor datetime fact to remove requirement to gather Ansible facts
+- **ENHANCEMENT** : Add `Stack.Facts` and `Stack.Url` variables
+- **ENHANCEMENT** : Add service role support
+- **ENHANCEMENT** : Remove jq dependency
 
 ### Version 0.9.5
 
