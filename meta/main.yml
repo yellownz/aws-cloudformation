@@ -3,7 +3,7 @@ galaxy_info:
   author: Justin Menga
   description: Orchestrates creation/update/deletion of CloudFormation stacks
   license: MIT
-  min_ansible_version: 2.2
+  min_ansible_version: 2.4
   categories:
   - cloud
   galaxy_tags:
