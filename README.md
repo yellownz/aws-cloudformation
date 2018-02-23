@@ -277,6 +277,7 @@ The following is an example of a playbook configured to use this role.  Note the
 ### Version 2.4.0
 
 - **BREAKING CHANGE** : Compatibility fixes for Ansible 2.4.x
+- **BREAKING CHANGE** : Stack transform syntax changed to mirror CloudFormation nested tack syntax
 - **ENHANCEMENT** : Refactor datetime fact to remove requirement to gather Ansible facts
 - **ENHANCEMENT** : Add `Stack.Facts` and `Stack.Url` variables
 - **ENHANCEMENT** : Add service role support
