@@ -204,6 +204,32 @@ This role sets the following facts that you can use subsequently in your roles:
 - `Stack.Facts` - CloudFormation facts about the created stack.  This includes stack resources and stack outputs and is identical to the `cloudformation['<stack-name>']` fact.
 - `Stack.Url` - S3 URL of the CloudFormation template.  This is also printed at the end of the completion of this role.
 
+## Stack Transforms
+
+This role includes a feature called stack transforms, which provide the ability to merge resources defined as CloudFormation nested stacks into a single CloudFormation template.  This approach is useful for leveraging reusable component templates, without some of the limitations of creating nested stacks.
+
+To enable the stack transform merge behaviour, you must set a metadata property on the AWS::CloudFormation::Stack resource:
+
+```
+Resources:
+  MyResource:
+    Metadata:
+      DeploymentStrategy: merge
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: asg.yml.j2
+      Parameters:
+        Name: MyResource
+...
+...
+```
+
+The `TemplateURL` property references a template file in the local playbook `templates` folder, or in this roles `templates` folder.
+
+The merge behaviour will also transform child stack outputs referenced in the main stack.
+
+> All CloudFormation instrinsic functions are supported except for the Fn::Sub mapping syntax.
+
 ## Macros
 
 This role includes Jinja macros which can automatically generate CloudFormation resources using common conventions and patterns.
