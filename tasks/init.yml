@@ -28,7 +28,7 @@
       
   - name: create timestamp fact
     set_fact:
-      current_timestamp: "{{ (ansible_date_time.date + ansible_date_time.time) | regex_replace('[^\\d]','') }}"
+      current_timestamp: "{{ lookup('pipe','date +%Y%m%d%H%M%S') }}"
 
   - name: create build folder fact
     set_fact:
