@@ -274,6 +274,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.4.1
+
+- **BUG FIX**: Disable stack policy only if an active stack currently exists
+
 ### Version 2.4.0
 
 - **BREAKING CHANGE** : Compatibility fixes for Ansible 2.4.x
