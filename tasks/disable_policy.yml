@@ -1,6 +1,10 @@
 ---
 - block:
+  - name: check stack currently exists
+    shell: aws cloudformation list-stacks --query "StackSummaries[?StackName=='{{ cf_stack_name }}' && StackStatus != 'DELETE_COMPLETE' && StackStatus != 'DELETE_IN_PROGRESS']" --output text
+    changed_when: False
+    register: cf_stack_exists
   - name: disable current stack policy
     shell: aws cloudformation set-stack-policy --stack-name '{{ cf_stack_name }}' --stack-policy-body '{{ cf_default_stack_policy | to_json }}'
     changed_when: False
-
+    when: cf_stack_exists.stdout
