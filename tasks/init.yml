@@ -33,7 +33,7 @@
 
   - name: create build folder fact
     set_fact:
-      cf_build_folder: "{{ cf_build_folder | default(cf_job_path + '/' + current_timestamp) }}"
+      cf_build_folder: "{{ Stack.BuildFolder | default(cf_job_path + '/' + current_timestamp) }}"
 
   - name: create build folder
     file:
