@@ -274,6 +274,11 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.5.0
+
+- **ENHANCEMENT**: Compatible with Ansible 2.5
+- **BUG FIX**: Ensure S3 URL is used when upload to S3 is configured
+
 ### Version 2.4.2
 
 - **ENHANCEMENT**: Add `Stack.BuildFolder` variable for setting build output during template generation

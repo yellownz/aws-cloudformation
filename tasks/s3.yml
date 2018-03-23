@@ -27,6 +27,7 @@
     register: cf_s3_result
   - name: set S3 url fact
     set_fact:
+      cf_s3_template_url: "{{ cf_s3_result.url.split('?') | first }}"
       Stack: "{{ Stack | combine({'Url':cf_s3_result.url},recursive=True) }}"
   - name: S3 url
     debug: msg={{ Stack.Url }}
