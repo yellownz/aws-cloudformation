@@ -274,6 +274,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.5.1
+
+- **BUG FIX**: Ensure template and config files are unique when stack name is same across multiple environments
+
 ### Version 2.5.0
 
 - **ENHANCEMENT**: Compatible with Ansible 2.5
