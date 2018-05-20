@@ -18,9 +18,10 @@
   always:
     - import_tasks: enable_policy.yml
       when: cf_disable_stack_policy
-    - fail: msg="The playbook encountered an error"
-      when: cf_failure | default(False) | bool
   when: not cf_delete_stack
+
+- fail: msg="The playbook encountered an error"
+  when: cf_failure | default(False) | bool
 
 - block:
     - import_tasks: delete.yml
