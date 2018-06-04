@@ -26,9 +26,12 @@
       set_fact:
         Stack: "{{ Stack | combine({ 'Resources': Stack.Resources | dict_override(cf_stack_globals)}, recursive=True) }}"
         cf_stack_template_vars: "{{ cf_stack_template_vars | combine({ 'Resources':cf_stack_template_vars.Resources | dict_override(cf_stack_globals)}, recursive=True) }}"
-    - name: apply stack overrides
+    - name: apply simple stack overrides
       set_fact:
         cf_stack_template_vars: "{{ cf_stack_template_vars | combine(cf_stack_overrides, recursive=True) }}"
+    - name: apply complex overrides
+      set_fact:
+        Stack: "{{ Stack | combine(vars['hostvars'][env] | stack_overrides, recursive=True) }}"
     - name: apply stack property transforms
       set_fact:
         Stack: "{{ Stack | property_transform(filter_paths=[role_path + '/filter_plugins']) }}"
