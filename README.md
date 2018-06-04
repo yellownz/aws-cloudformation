@@ -151,6 +151,62 @@ Stack.Inputs:
   ApplicationAutoscalingDesiredCount: "{{ config_application_autoscaling_desired_count }}"
 ```
 
+### Stack Overrides
+
+You can override any portion of a CloudFormation template using JMESPath query notation:
+
+```
+# Overrides the MyProperty property with the Properties dictionary for the MyResource resource
+# This is a simple override in that it only traverses a dictionary path to reach the leaf element
+Stack.Resources.MyResource.Properties.MyProperty: foo
+
+# The remaining examples are complex overrides, in that they contain list elements and therefore the leaf element may refer to multiple elements
+# This will replace the Environment property in the first container definition of the MyResource resource
+Stack.Resources.MyResource.Properties.ContainerDefinitions[0].Environment:
+  - Name: FOO
+    Value: bar
+
+# This will append (rather than replace) the specified value(s) to the Environment property in the first container definition
+Stack.Resources.MyResource.Properties.ContainerDefinitions[0].Environment[]:
+  - Name: FOO
+    Value: bar
+
+# This will replace all Environment property for all ContainerDefinitions with a Name of squid
+Stack.Resources.MyResource.Properties.ContainerDefinitions[?Name=='squid'].Environment:
+  - Name: FOO
+    Value: bar
+```
+
+Note the following behaviors:
+
+- For complex overrides (see example above), the override will not be applied if elements returned by the query do not exist
+- For simple overrides (see example above), the override will be added to the dictionary tree if the element returned by the query does not exist.  This is useful for adding additional resources or other elements to your stack.
+- Complex overrides take precedence over simple overrides
+
+For example, if your template doesn't include any mappings, the following simple override will add the specified mapping, even though the mapping does not exist:
+
+```
+# If the Accounts mapping already exists in the template it will be overriden
+# If the Accounts mapping does not exist it will be created
+Stack.Mappings.Accounts:
+  dev:
+    id: 12345
+    users:
+      - justin
+  staging:
+    id: 54321
+    users:
+      - pema
+```
+
+However contrast the behavior when using a complex override:
+
+```
+# If the Accounts mapping already exists in the template, the id property on any child elements of the Accounts mapping will be overridden
+# If the Accounts mapping does not exist or the id property is not defined, no changes will be made
+Stack.Mappings.Accounts.*.id: 55555
+```
+
 ### S3 Template Upload
 
 The S3 template upload feature is enabled by default, but can be disabled if required by setting the variable `Stack.Upload` to `false`.
@@ -273,6 +329,10 @@ The following is an example of a playbook configured to use this role.  Note the
 ```
 
 ## Release Notes
+
+### Version 2.5.3
+
+- **NEW FEATURE**: Add support for overrides using JMESPath queries
 
 ### Version 2.5.2
 

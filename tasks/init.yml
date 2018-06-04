@@ -2,8 +2,8 @@
 - block:
   - name: create stack variables
     set_fact:
-      Stack: "{{ Stack | default({}) | combine((vars['hostvars'][env] | dotted_dict(paths=['Stack.'])).get('Stack') or {}, recursive=True) }}"
-      Config: "{{ Stack | default({}) | combine((vars['hostvars'][env] | dotted_dict(paths=['Config.'])).get('Config') or {}, recursive=True) }}"
+      Stack: "{{ Stack | default({}) | combine((vars['hostvars'][env] | cfn_dotted_dict(paths=['Stack.'])).get('Stack') or {}, recursive=True) }}"
+      Config: "{{ Stack | default({}) | combine((vars['hostvars'][env] | cfn_dotted_dict(paths=['Config.'])).get('Config') or {}, recursive=True) }}"
 
   - name: create stack facts
     set_fact:
@@ -18,7 +18,7 @@
         'Outputs': Stack.Outputs | default({}),
         'Conditions': Stack.Conditions | default({})
       } }}"
-      cf_stack_globals: "{{ vars['hostvars'][env] | dotted_dict(paths=['AWS::']) }}"
+      cf_stack_globals: "{{ vars['hostvars'][env] | cfn_dotted_dict(paths=['AWS::']) }}"
       cf_job_path: "{{ Stack.Path | default('./build') }}"
       cf_delete_stack: "{{ Stack.Delete | default(False) | bool }}"
       cf_disable_stack_policy: "{{ Stack.DisablePolicy | default(False) | bool }}"
