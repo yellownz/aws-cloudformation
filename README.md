@@ -4,9 +4,9 @@ This is an Ansible role for generating CloudFormation templates and deploying Cl
 
 ## Requirements
 
-- Python 2.7
-- PIP package manager (**easy_install pip**)
-- Ansible 2.4 or greater (**pip install ansible**)
+- Python 2.7 or 3.6
+- PIP package manager
+- Ansible 2.5 or greater (**pip install ansible**)
 - Boto3 (**pip install boto3**)
 - Netaddr (**pip install netaddr**)
 - AWS CLI (**pip install awscli**) installed and configured
@@ -277,6 +277,10 @@ The following is an example of a playbook configured to use this role.  Note the
 ```
 
 ## Release Notes
+
+### Version 2.7.0
+
+- **ENHANCEMENT**: Ansible 2.7 and Python 3 support
 
 ### Version 2.5.3
 

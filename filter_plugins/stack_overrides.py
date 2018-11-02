@@ -32,7 +32,7 @@ def stack_overrides(vars, source='Stack', paths=[
   # Selects top level source object - e.g. 'Stack'
   data = vars[source]
   # Sort keys based upon selector depth
-  vars_keys = vars.keys()
+  vars_keys = list(vars.keys())
   vars_keys.sort(key=lambda k: len(k.split(".")))  # TODO: what if filters have '.' characters?
   # Assuming [{'Stack.x.x.x': 'value'}...]
   # Returns tuples in form [('Stack.x.x.x', 'value')...]

@@ -153,7 +153,7 @@ def fix_conditions(data, transform, input_parameter_key, input_parameter_value, 
        resource_property.get('Fn::ImportValue') or
        find_in_sub(resource_property.get('Fn::Sub'),resource_keys))):
     # Find and replace any conditions that reference an illegal input parameter
-    for c,v in transform.get('Conditions',{}).iteritems():
+    for c,v in transform.get('Conditions',{}).items():
       logging.debug("--> Forcing evaluation of condition %s as it references an illegal input value", c)
       search_and_replace(transform['Conditions'],{'Ref':input_parameter_key}, input_parameter_key)
 
@@ -177,7 +177,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
       'resource': resource_value,
       'output': render_template(os.path.basename(file), os.path.dirname(file), resource_value, filters) 
     }
-    for resource_key, resource_value in data['Resources'].iteritems() 
+    for resource_key, resource_value in data['Resources'].items()
     if resource_value.get('Type') == STACK_TRANSFORM
     for file in [lookup_template(resource_value['Template'], template_paths)]
   ]
@@ -218,14 +218,14 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
 
     # Fix conditions that will result in illegally referencing a resource
     logging.debug("%s: Evaluating conditions that reference a resource or stack export", name)
-    for output_param_key, output_param_value in output_parameters.iteritems():
+    for output_param_key, output_param_value in output_parameters.items():
       resource_property = resource_properties.get(output_param_key)
       if resource_property:
         fix_conditions(data, output, output_param_key, output_param_value, resource_property)
 
     # Process input parameters
     logging.debug("%s: Replacing transform input parameter values", name)
-    for output_param_key, output_param_value in output_parameters.iteritems():
+    for output_param_key, output_param_value in output_parameters.items():
       # Get corresponding transform input property from main stack
       resource_property = resource_properties.get(output_param_key)
       if resource_property:
@@ -255,7 +255,7 @@ def stack_transform(data, filter_paths=[],template_paths=[], debug=False):
         else:
           output['Resources'][name+mapping]['DependsOn'] = dependencies
     logging.debug("%s: Replacing transformed output values in main stack", name)
-    for key,value in output.get('Outputs', {}).iteritems():
+    for key,value in output.get('Outputs', {}).items():
       replaced_value = value['Value']
       logging.debug("--> Replacing %s value with %s", key, replaced_value)
       search_and_replace(data, key, replaced_value, as_value=True)
@@ -280,9 +280,9 @@ def property_transform(data, filter_paths=[]):
   # Get transform properties - {Stack}.Resources.<Resource>.Properties.<Property>.Property::Transform
   transforms = [ 
     {'resource':resource_key, 'property': property_key}
-    for resource_key, resource_value in data['Resources'].iteritems() 
+    for resource_key, resource_value in data['Resources'].items()
       if resource_value.get('Properties')
-    for property_key, property_value in resource_value.get('Properties').iteritems() 
+    for property_key, property_value in resource_value.get('Properties').items()
       if type(property_value) is dict and property_value.get(PROPERTY_TRANSFORM)
   ]
   for transform in transforms:

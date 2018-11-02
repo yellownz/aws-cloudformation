@@ -6,4 +6,4 @@ class FilterModule(object):
     }
 
 def dict_override(source, overrides, selector='Type'):
-  return {pk:v for k,v in overrides.iteritems() for pk, pv in source.iteritems() if pv.get(selector) == k}
+  return {pk:v for k,v in overrides.items() for pk, pv in source.items() if pv.get(selector) == k}
