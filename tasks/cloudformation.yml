@@ -1,35 +1,31 @@
----
-- block:
-    - name: set local path fact if s3 upload disabled
-      set_fact:
-        cf_stack_template_path: "{{ cf_stack_template_json }}"
-      when: not cf_upload_s3 | default(false) | bool
-    - name: configure application stack
-      cloudformation:
-        stack_name: "{{ cf_stack_name }}"
-        stack_policy: "{{ cf_stack_policy_json }}"
-        state: present
-        template: "{{ cf_stack_template_path | default(omit) }}"
-        template_url: "{{ cf_s3_template_url | default(omit) }}"
-        template_parameters: "{{ cf_stack_inputs }}"
-        disable_rollback: "{{ cf_disable_rollback }}"
-        role_arn: "{{ cf_stack_role | default(omit) }}"
-        tags: "{{ cf_stack_tags }}"
-      register: cf_stack_result
-  tags:
-    - deploy
-
-- block:
-    - name: get stack facts
-      cloudformation_facts:
-        stack_name: "{{ cf_stack_name }}"
-        stack_resources: true
-      changed_when: false
-    - name: set stack facts
-      set_fact:
-        Stack: "{{ Stack | combine({ 'Facts': cloudformation[cf_stack_name] },recursive=True) }}"
-    - name: Stack.Facts variable
-      debug: msg={{ Stack.Facts }}
-      when: debug
-  tags:
+--- 
+- block: 
+    - name: generate parameter overrides 
+      set_fact: 
+        cf_parameter_overrides: "{{ cf_stack_inputs | dict_to_kv_string }}" 
+    - name: deploy stack 
+      shell: aws cloudformation deploy 
+        --stack-name {{ cf_stack_name }} 
+        --template-file {{ cf_stack_template_yaml }} 
+        {{ '--s3-bucket ' + cf_s3_bucket if cf_upload_s3 else '' }} 
+        {{ '--s3-prefix ' + cf_stack_name + '/' + current_timestamp if cf_upload_s3 else ''}} 
+        {{ '--parameter-overrides ' + cf_parameter_overrides if cf_parameter_overrides else '' }} 
+        {{ '--role-arn=' + cf_stack_role if cf_stack_role else '' }} 
+        --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND 
+        --no-fail-on-empty-changeset 
+  tags: 
+    - deploy 
+ 
+- block: 
+    - name: get stack facts 
+      cloudformation_facts: 
+        stack_name: "{{ cf_stack_name }}" 
+        stack_resources: true 
+      changed_when: false 
+    - name: set stack facts 
+      set_fact: 
+        Stack: "{{ Stack | combine({'Facts': cloudformation[cf_stack_name]},recursive=True) }}" 
+    - debug: msg={{ Stack.Facts }} 
+      when: debug 
+  tags: 
     - deploy

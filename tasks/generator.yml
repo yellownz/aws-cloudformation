@@ -3,8 +3,6 @@
     - name: set template encoding facts
       set_fact:
         cf_stack_template_yaml: "{{ cf_build_folder }}/{{ env }}-{{ cf_stack_name }}-stack.yml"
-        cf_stack_template_json: "{{ cf_build_folder }}/{{ env }}-{{ cf_stack_name }}-stack.json"
-        cf_stack_template_temp_json: "{{ cf_build_folder }}/{{ env }}-{{ cf_stack_name }}-stack.tmp.json"
         cf_stack_policy_json: "{{ cf_build_folder }}/{{ env }}-{{ cf_stack_name }}-policy.json"
         cf_stack_config_json: "{{ cf_build_folder }}/{{ env }}-{{ cf_stack_name }}-config.json"
     - name: generate YAML template
@@ -41,9 +39,6 @@
     - name: generate stack policy
       copy: content={{ cf_stack_policy | to_json }} dest={{ cf_stack_policy_json }}
       changed_when: False
-    - name: generate compact JSON template
-      copy: content={{ lookup('file', cf_stack_template_yaml) | from_yaml | compact | string }} dest={{ cf_stack_template_json }}
-      changed_when: False
     - name: set stack inputs
       set_fact:
         cf_stack_inputs: "{{ cf_stack_inputs | default(Stack.Parameters | default({}) | stack_inputs(Stack.Inputs | default({}))) }}"
@@ -56,5 +51,13 @@
     - name: generate stack config
       copy: content={{ cf_stack_config | to_json }} dest={{ cf_stack_config_json }}
       changed_when: False
+    - name: detect template size
+      stat:
+        path: "{{ cf_stack_template_yaml }}"
+      register: cf_stack_template_stat
+    - name: set upload flag if template exceeds 51,200 bytes
+      set_fact:
+        cf_upload_s3: True
+      when: cf_stack_template_stat.stat.size > 51200
   tags:
     - generate
