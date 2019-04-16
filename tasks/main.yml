@@ -4,16 +4,21 @@
 
 - block:
     - import_tasks: disable_policy.yml
-  when: cf_disable_stack_policy
+  when: cf_disable_stack_policy | default(False) | bool
 
 - block:
     - import_tasks: generator.yml
     - import_tasks: s3.yml
-      when: cf_upload_s3
     - import_tasks: cloudformation.yml
+  rescue:
+    - name: capture failure
+      set_fact: 
+        cf_failure: "True"
   always:
     - import_tasks: enable_policy.yml
       when: cf_disable_stack_policy
+    - fail: msg="A playbook error occurred"
+      when: cf_failure | default(False) | bool
   when: not cf_delete_stack
 
 - block:

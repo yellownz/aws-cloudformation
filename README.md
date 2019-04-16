@@ -278,6 +278,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.7.1
+
+- **ENHANCEMENT**: Use AWS CLI for deployments.  This enables support for SAM templates and other template features that require a change set to be created as part of the deployment process.
+
 ### Version 2.7.0
 
 - **ENHANCEMENT**: Ansible 2.7 and Python 3 support
