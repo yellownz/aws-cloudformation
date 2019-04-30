@@ -14,4 +14,4 @@
       cf_s3_bucket: "{{ cf_account_id + '-cfn-templates' }}" 
   when: cf_s3_bucket is not defined 
   tags: 
-    - generate 
+    - deploy
