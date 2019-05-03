@@ -278,6 +278,10 @@ The following is an example of a playbook configured to use this role.  Note the
 
 ## Release Notes
 
+### Version 2.7.3
+
+- **BUG FIX**: Quote parameter overrides to allow for parameters with spaces
+
 ### Version 2.7.2
 
 - **BUG FIX**: Fix AWS account being looked up for generate tasks.

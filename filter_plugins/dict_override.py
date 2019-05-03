@@ -11,4 +11,4 @@ def dict_override(source, overrides, selector='Type'):
  
 # Returns dict as 'key1=value1<separator>key2=value2 ...' 
 def dict_to_kv_string(source, separator=' '): 
-  return ' '.join([ "{}={}".format(k,v) for k,v in source.items() ])
+  return ' '.join([ "{}='{}'".format(k,v) for k,v in source.items() ])
